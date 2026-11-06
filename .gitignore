@@ -3,8 +3,38 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 .venv/
+.env
+.env.*
+runtime/
+secrets/
+*.pem
+*.key
 dist/
 # 实验运行时产物（SQLite 归档时导出 CSV/JSON 后另存）
 data/*.db
 data/*.db-wal
 data/*.db-shm
+
+# Local verification artifacts
+.validation/
+.pytest*/
+
+# Machine-specific configuration, credentials and model/runtime files
+.ssh/
+id_rsa
+id_ed25519
+config.local.json
+*.gguf
+*.safetensors
+*.pt
+*.pth
+*.sqlite
+*.sqlite3
+*.log
+
+# New experiment outputs stay local; retain only the historical offline fixtures
+eval/report*.md
+reports/*
+!reports/unified-evidence-acceptance-20261021.json
+!reports/unified-evidence-demo-reviewed-20261021/
+!reports/unified-evidence-demo-reviewed-20261021/**

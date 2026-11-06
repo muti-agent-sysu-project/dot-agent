@@ -1,0 +1,2 @@
+# Keep frozen dataset and source hashes stable across Windows and Linux clones.
+* text=auto eol=lf

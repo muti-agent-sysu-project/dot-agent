@@ -1,0 +1,56 @@
+{
+  "created_utc": "2026-10-02T07:58:27.820381+00:00",
+  "instance_id": "6fcb40b7f5-2694e599",
+  "project_directory": "/root/autodl-tmp/edge-cloud-prototype/prototype",
+  "python": "3.12.3 | packaged by Anaconda, Inc. | (main, May  6 2024, 19:46:43) [GCC 11.2.0]",
+  "platform": "Linux-5.4.0-100-generic-x86_64-with-glibc2.35",
+  "torch_installed_version": "2.8.0+cu128",
+  "deployment": {
+    "server": "runtime/llama/bin/llama-server",
+    "model": "runtime/downloads/Qwen3-4B-Q4_K_M.gguf",
+    "library_dirs": [
+      "runtime/llama/bin"
+    ],
+    "gpu": "NVIDIA GeForce RTX 3080 Ti, 12288 MiB, 580.76.05",
+    "runtime_version": "version: 0.5.0-dev (build 0, commit unknown)\nbuilt with GNU 11.4.0 for Linux x86_64",
+    "model_revision": "bc640142c66e1fdd12af0bd68f40445458f3869b",
+    "runtime_revision": "b0aca3c6539e2dd55ea510bbb79591852a4d4b81",
+    "runtime_build": "source_cuda"
+  },
+  "verified_model": {
+    "verified_model": "Qwen3-4B-Q4_K_M.gguf",
+    "sha256": "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5",
+    "bytes": 2497280256
+  },
+  "gpu_observed": "NVIDIA GeForce RTX 3080 Ti, 12288 MiB, 3333 MiB, 38 %, 580.76.05",
+  "gpu_compute_processes": "10030, /root/autodl-tmp/edge-cloud-prototype/prototype/runtime/llama/bin/llama-server, 3324 MiB",
+  "server_wrapper_pid": 10029,
+  "doctor": {
+    "local": {
+      "status": "ready",
+      "configured_model": "qwen-local",
+      "listed_models": [
+        "qwen-local"
+      ]
+    },
+    "cloud": {
+      "status": "not_configured"
+    }
+  },
+  "baseline_directory": "reports/local-verified-20261002",
+  "cuda_log_excerpt": [
+    "0.00.462.967 I cmn  common_param:   - CUDA0   : NVIDIA GeForce RTX 3080 Ti (11910 MiB, 11652 MiB free)",
+    "0.00.463.140 I cmn  common_param: system_info: n_threads = 24 (n_threads_batch = 24) / 48 | CUDA : ARCHS = 860 | USE_GRAPHS = 1 | FA_QUANTS = q4_0-q4_0,q8_0-q8_0,f16-f16,bf16-bf16 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | AVX512 = 1 | AVX512_VNNI = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | ",
+    "0.00.900.838 I common_memory_breakdown_print: |   - CUDA0 (RTX 3080 Ti) | 11910 = 11652 + (3030 =  2375 +     576 +      79) +       -2772 |",
+    "0.01.065.530 I llama_prepare_model_devices: using device CUDA0 (NVIDIA GeForce RTX 3080 Ti) (0000:3b:00.0) - 11652 MiB free",
+    "0.01.487.525 I load_tensors: offloading output layer to GPU",
+    "0.01.487.533 I load_tensors: offloading 35 repeating layers to GPU",
+    "0.01.487.533 I load_tensors: offloaded 37/37 layers to GPU",
+    "0.01.487.541 I load_tensors:        CUDA0 model buffer size =  2375.91 MiB",
+    "0.02.128.904 I llama_context:  CUDA_Host  output buffer size =     0.58 MiB",
+    "0.02.129.295 I llama_kv_cache:      CUDA0 KV buffer size =   576.00 MiB",
+    "0.02.147.603 I sched_reserve:      CUDA0 compute buffer size =    79.01 MiB",
+    "0.02.147.610 I sched_reserve:  CUDA_Host compute buffer size =    14.01 MiB",
+    "0.02.236.923 I srv  llama_server: listening on http://127.0.0.1:8000"
+  ]
+}

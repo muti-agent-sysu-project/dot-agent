@@ -1,0 +1,67 @@
+{
+  "verified": true,
+  "requests": 24,
+  "calls": 50,
+  "source_hashes_verified": true,
+  "comparison_cloud_tokens": 2779,
+  "probe_cloud_tokens": 27,
+  "demo_cloud_tokens": 446,
+  "all_live_cloud_tokens": 3252,
+  "all_live_cloud_calls": 24,
+  "checks": [
+    "unique_ids",
+    "fixed_dataset_and_sources",
+    "independent_exact_match",
+    "complete_usage",
+    "stage_and_request_totals",
+    "wall_clock_covers_calls",
+    "summary_accuracy_latency",
+    "probe_and_demo"
+  ],
+  "metrics": {
+    "local": {
+      "accuracy": 0.16666666666666666,
+      "success_rate": 1,
+      "cloud_tokens": 0,
+      "cloud_attempts": 0,
+      "mean_ms": 192.22342719634375,
+      "p50_ms": 78.798308968544,
+      "p95_ms": 491.3843087852001,
+      "upgrade_count": 0,
+      "degradation_count": 0
+    },
+    "cloud": {
+      "accuracy": 0.6666666666666666,
+      "success_rate": 1,
+      "cloud_tokens": 391,
+      "cloud_attempts": 6,
+      "mean_ms": 658.1093842784563,
+      "p50_ms": 676.1018335819244,
+      "p95_ms": 769.6089036762714,
+      "upgrade_count": 0,
+      "degradation_count": 0
+    },
+    "hybrid": {
+      "accuracy": 0.3333333333333333,
+      "success_rate": 1,
+      "cloud_tokens": 233,
+      "cloud_attempts": 3,
+      "mean_ms": 436.61416446169216,
+      "p50_ms": 454.5241594314575,
+      "p95_ms": 828.5922408103943,
+      "upgrade_count": 0,
+      "degradation_count": 0
+    },
+    "dot": {
+      "accuracy": 0.6666666666666666,
+      "success_rate": 1,
+      "cloud_tokens": 2155,
+      "cloud_attempts": 12,
+      "mean_ms": 1851.725636670987,
+      "p50_ms": 1864.2069920897484,
+      "p95_ms": 2244.7958551347256,
+      "upgrade_count": 0,
+      "degradation_count": 0
+    }
+  }
+}

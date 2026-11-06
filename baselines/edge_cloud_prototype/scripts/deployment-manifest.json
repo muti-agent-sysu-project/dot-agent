@@ -1,0 +1,27 @@
+{
+  "runtime_release": "b11321",
+  "runtime_revision": "b0aca3c6539e2dd55ea510bbb79591852a4d4b81",
+  "runtime_source": "https://github.com/ggml-org/llama.cpp/releases/tag/b11321",
+  "model_repo": "Qwen/Qwen3-4B-GGUF",
+  "model_revision": "bc640142c66e1fdd12af0bd68f40445458f3869b",
+  "artifacts": [
+    {
+      "name": "llama-b0aca3c6539e2dd55ea510bbb79591852a4d4b81.tar.gz",
+      "kind": "source",
+      "size": 37755513,
+      "sha256": "b5475a493e0d17f8af121a4a442fdda78fe0ef6f19f230a5c1690b699ee49c95",
+      "checksum_source": "Observed SHA256 of official GitHub codeload archive at immutable commit; not a publisher checksum",
+      "urls": ["https://codeload.github.com/ggml-org/llama.cpp/tar.gz/b0aca3c6539e2dd55ea510bbb79591852a4d4b81"]
+    },
+    {
+      "name": "Qwen3-4B-Q4_K_M.gguf",
+      "kind": "model",
+      "size": 2497280256,
+      "sha256": "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5",
+      "urls": [
+        "https://hf-mirror.com/Qwen/Qwen3-4B-GGUF/resolve/bc640142c66e1fdd12af0bd68f40445458f3869b/Qwen3-4B-Q4_K_M.gguf",
+        "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/bc640142c66e1fdd12af0bd68f40445458f3869b/Qwen3-4B-Q4_K_M.gguf"
+      ]
+    }
+  ]
+}

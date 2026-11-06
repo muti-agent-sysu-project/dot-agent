@@ -1,0 +1,128 @@
+[
+  {
+    "id": "L01_qa_def",
+    "category": "local_easy",
+    "query": "什么是 HTTPS？它和 HTTP 的主要区别是什么？",
+    "expect_cloud": false,
+    "sensitive": []
+  },
+  {
+    "id": "L02_qa_fact",
+    "category": "local_easy",
+    "query": "TCP 三次握手的过程简单说明一下。",
+    "expect_cloud": false,
+    "sensitive": []
+  },
+  {
+    "id": "L03_qa_short",
+    "category": "local_easy",
+    "query": "1 摄氏度等于多少华氏度？",
+    "expect_cloud": false,
+    "sensitive": []
+  },
+  {
+    "id": "M01_math_multistep",
+    "category": "local_medium",
+    "query": "一个班有 45 名学生，其中 60% 参加了数学竞赛，参加竞赛的学生中 1/3 获奖了。问获奖的学生有多少人？",
+    "expect_cloud": false,
+    "sensitive": []
+  },
+  {
+    "id": "M02_logic",
+    "category": "local_medium",
+    "query": "甲乙丙三人中只有一人说真话。甲说：乙在说谎；乙说：丙在说谎；丙说：甲和乙都在说谎。谁说真话？",
+    "expect_cloud": false,
+    "sensitive": []
+  },
+  {
+    "id": "M03_summary",
+    "category": "local_medium",
+    "query": "把这段话概括成一句话：某某大学网络空间安全学院依托国家一流网络安全建设示范项目，围绕隐私计算、入侵检测、恶意代码分析三个方向开展研究，近三年承担国家自然科学基金 12 项，与多家单位共建联合实验室，学生竞赛获奖 40 余项。",
+    "expect_cloud": false,
+    "sensitive": []
+  },
+  {
+    "id": "C01_code_gen",
+    "category": "cloud_code",
+    "query": "帮我写一份检验身份证号码正确性的C语言代码，要求包含18位身份证的校验位算法（加权因子 7 9 10 5 8 4 2 1 6 3 7 9 10 5 8 4 2，校验码 1 0 X 9 8 7 6 5 4 3 2），并给出完整可编译的程序和示例。",
+    "expect_cloud": true,
+    "sensitive": []
+  },
+  {
+    "id": "C02_code_verify_id",
+    "category": "cloud_code",
+    "query": "帮我写一份检验身份证号码正确性的C语言代码，我的身份证号码是441900200001224321，写完后用它验证我的号码。",
+    "expect_cloud": true,
+    "sensitive": ["441900200001224321"]
+  },
+  {
+    "id": "C03_plan_trip",
+    "category": "cloud_planning",
+    "query": "我计划用 5 天时间从广州出发去成都和重庆两地自由行，请帮我做一份详细的行程规划，包括交通衔接、每日景点安排和预算估算。",
+    "expect_cloud": true,
+    "sensitive": []
+  },
+  {
+    "id": "C04_reasoning_hard",
+    "category": "cloud_planning",
+    "query": "设计一个分布式限流器：要求在 1000 台服务器集群内全局每秒最多放行 10 万个请求，误差不超过 5%，网络分区时允许短暂超限但不能长时间拒绝服务。请给出方案、数据结构选择和故障恢复策略。",
+    "expect_cloud": true,
+    "sensitive": []
+  },
+  {
+    "id": "P01_mask_phone",
+    "category": "privacy_masked",
+    "query": "帮我给客户张伟发一条会议提醒短信，他的手机号是13812345678，会议是明天上午十点在第三会议室，请把短信内容写出来。",
+    "expect_cloud": true,
+    "sensitive": ["张伟", "13812345678"]
+  },
+  {
+    "id": "P02_mask_id_checksum",
+    "category": "privacy_masked",
+    "query": "李明的身份证号码是441900200001224321，请帮他检查这个号码的校验位是否正确，不正确的话算出正确的校验位。",
+    "expect_cloud": true,
+    "sensitive": ["李明", "441900200001224321"]
+  },
+  {
+    "id": "P03_mask_email",
+    "category": "privacy_masked",
+    "query": "请帮我起草一封英文邮件，发给合作方，落款联系人用我的信息：姓名王小红，邮箱wangxiaohong1998@example.com，内容是询问对方下周三是否有时间开线上会议讨论合同细节。",
+    "expect_cloud": true,
+    "sensitive": ["王小红", "wangxiaohong1998@example.com"]
+  },
+  {
+    "id": "P04_mask_address",
+    "category": "privacy_masked",
+    "query": "我在广州市天河区五山路483号华南理工大学上学，请帮我查一下附近有哪些地铁站，并说明从学校步行过去的路线。",
+    "expect_cloud": true,
+    "sensitive": ["广州市天河区五山路483号"]
+  },
+  {
+    "id": "P05_id_partial",
+    "category": "privacy_masked",
+    "query": "我的身份证前6位是441900，请解释这6位地址码分别代表什么含义。",
+    "expect_cloud": true,
+    "sensitive": []
+  },
+  {
+    "id": "E01_long_input",
+    "category": "edge",
+    "query": "以下是一段技术文档，请提炼三个要点：分布式系统中，一致性哈希通过将节点和数据映射到环上解决横向扩容时大量键重映射的问题；虚拟节点进一步平滑负载并支持异构机器权重；Gossip 协议以 O(log N) 轮将成员变更传播到全集群；Raft 用多数派投票保证日志顺序一致；租约机制在读多写少场景下降低协商开销但依赖时钟偏移假设。",
+    "expect_cloud": false,
+    "sensitive": []
+  },
+  {
+    "id": "E02_mixed",
+    "category": "edge",
+    "query": "帮我写一个 Python 函数校验手机号格式，然后用 13812345678 这个号码测试一下是否合法。",
+    "expect_cloud": true,
+    "sensitive": ["13812345678"]
+  },
+  {
+    "id": "E03_trick_question",
+    "category": "edge",
+    "query": "我朋友的手机号是138-1234-5678（中间是连字符），请帮我把这个号码格式化成 13812345678 的标准形式。",
+    "expect_cloud": false,
+    "sensitive": []
+  }
+]

@@ -1,0 +1,2 @@
+{"id":"synthetic-registration","query":"报名截止时间是什么？","sources":[{"source_id":"location","text":"演示活动地点在教学楼。"},{"source_id":"deadline","text":"报名截止时间是周五17点。"}],"expected":"报名截止时间是周五17点。"}
+{"id":"synthetic-delivery","query":"交付时需要提供什么？","sources":[{"source_id":"delivery","text":"交付时需要提供源代码和使用说明。"},{"source_id":"color","text":"演示页面采用浅色背景。"}],"expected":"交付时需要提供源代码和使用说明。"}

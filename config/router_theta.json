@@ -1,0 +1,6 @@
+{
+  "REASONING": 0.45,
+  "PLANNING": 0.3,
+  "TOOLUSE": 0.45,
+  "QA": 0.5
+}

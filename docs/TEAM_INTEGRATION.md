@@ -1,5 +1,7 @@
 # 团队实现整合分析（2026-10-02）
 
+2026-10-03补充：B的完整可运行参考基线、部署脚本、组员指南及公开真实实验记录已按提交 `22fb8c3` 导入 `baselines/edge_cloud_prototype/`。下文“未吸收”指未嵌入C主流水线，相关代码现在可作为独立基线运行。来源、入口与证据边界见 [REFERENCE_BASELINE.md](REFERENCE_BASELINE.md)。
+
 本文档记录对团队两份独立实现的详尽分析、与主线 dot-agent 的对比、以及合成决策——
 每个吸收项与不吸收项都给出理由，供结题报告与后续迭代追溯。
 
@@ -123,3 +125,13 @@
 - [ ] token 精确预算：上下文淘汰目前用字节近似，真实部署后按 usage 换算
 - [ ] α-quantile 在 Ollama 各版本的 logprobs 可行性验证（决定信号路线）
 - [ ] B 的 JSON 分解格式作为 decomposer 的可选模式（带严格校验）
+
+## 主线接口接入补充（2026-10-03）
+
+已将 llama.cpp 本地适配、DeepSeek thinking 配置、严格生成预检、截断/空回答失败且保留 usage 的处理接入 `dot_agent` 网关。新增远程密钥加载入口 `scripts/run_autodl.py`。不是只有参考代码副本；组员可直接从主线启动。操作和验证边界见 [AUTODL_MAINLINE.md](AUTODL_MAINLINE.md)。本次未做主线真实端云评测。
+
+## 统一入口接入（2026-10-21）
+
+在 3490928 的隔离分支上继续增量整合，新增带资料的真实主入口分支、BM25/本地编号选择、原文回取、云端引用契约和一次全文回退；网页和 JSON API 共用此主流程。普通任务框架与来源基线保留。本轮证据算法借鉴科研版 selection_products，但在线代码不导入 eval/research_data，也不更改固定 Stage 5 协议。
+
+统一流程复用 A 的既有计量机制、B 的网关与部署纪律、C 的任务调度。另修正按 caller 分组时把 unknown usage 计入 tokens 的口径。当前只完成离线工程验证，不声明质量、速度、token 的真实联合改善。使用方式见 [统一入口](UNIFIED_AGENT.md)。

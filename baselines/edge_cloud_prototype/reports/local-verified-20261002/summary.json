@@ -1,0 +1,54 @@
+{
+  "created_utc": "2026-10-02T07:58:27.712557+00:00",
+  "simulated": false,
+  "dataset_sha256": "bd9f786cc9725559b3309c46df8cd9a9a47210358d5f97fc5724ff20e3ed6edb",
+  "tasks": 12,
+  "repeats": 1,
+  "scoring": "normalized_exact_match",
+  "ordering": "rotated_modes_per_task",
+  "includes_warmup": true,
+  "cache_enabled": false,
+  "config": {
+    "local_model": "qwen-local",
+    "cloud_model": null,
+    "max_tokens": 256,
+    "temperature": 0,
+    "system_prompt": "准确回答用户问题，遵守用户要求的输出格式。",
+    "long_prompt_chars": 300,
+    "complex_keywords": [
+      "证明",
+      "多步推理",
+      "约束规划",
+      "编写代码",
+      "代码实现",
+      "prove",
+      "write code"
+    ],
+    "fallback_on_local_error": true
+  },
+  "results": {
+    "local": {
+      "requests": 12,
+      "successes": 12,
+      "errors": 0,
+      "success_rate": 1,
+      "accuracy": 0.5,
+      "cloud_tokens": 0,
+      "known_cloud_tokens_subtotal": 0,
+      "unknown_usage_calls": 0,
+      "cloud_attempts": 0,
+      "mean_ms": 179.83605650564036,
+      "p50_ms": 58.832865208387375,
+      "p95_ms": 455.4039962589741,
+      "fallback_rate": 0,
+      "simulated": false
+    }
+  },
+  "limitations": [
+    "冒烟题集不代表标准基准。",
+    "少量样本 P95 不能用于稳定性结论。",
+    "失败请求计入准确率分母和完整响应时间。",
+    "未知用量为 null，已知部分单独列出。",
+    "模型服务内部缓存/供应商缓存未控制，需正式实验前检查。"
+  ]
+}
