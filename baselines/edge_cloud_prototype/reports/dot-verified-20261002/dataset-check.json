@@ -1,0 +1,12 @@
+{
+  "verified_answers": {
+    "d01": "42",
+    "d02": "146",
+    "d03": "60",
+    "d04": "B",
+    "d05": "43",
+    "d06": "AB"
+  },
+  "method": "integer arithmetic and exhaustive pair selection; no model",
+  "dataset_sha256": "dd9f8cb480e8ae8d7a3ba0ae90a8b0a16518a9fd3af1eca8f7f5902354479638"
+}

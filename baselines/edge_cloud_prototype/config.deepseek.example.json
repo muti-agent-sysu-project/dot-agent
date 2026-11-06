@@ -1,0 +1,19 @@
+{
+  "local": {
+    "base_url": "http://127.0.0.1:8000/v1",
+    "model": "qwen-local",
+    "timeout_seconds": 120
+  },
+  "cloud": {
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-flash",
+    "api_key_env": "EDGE_CLOUD_API_KEY",
+    "timeout_seconds": 120,
+    "thinking": "disabled"
+  },
+  "max_tokens": 512,
+  "temperature": 0,
+  "dot_max_subtasks": 4,
+  "dot_context_max_bytes": 9000,
+  "dot_planner_max_tokens": 512
+}

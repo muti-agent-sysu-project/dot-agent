@@ -1,0 +1,12 @@
+{"id":"s01","category":"arithmetic","prompt":"17加25等于多少？只输出整数。","answers":["42"]}
+{"id":"s02","category":"arithmetic","prompt":"6乘以7等于多少？只输出整数。","answers":["42"]}
+{"id":"s03","category":"translation","prompt":"把英文 apple 翻译为中文，只输出译文。","answers":["苹果"]}
+{"id":"s04","category":"extraction","prompt":"从句子“小李周二在广州开会”提取城市，只输出城市名。","answers":["广州"]}
+{"id":"s05","category":"classification","prompt":"“这部电影非常精彩”表达正面还是负面情感？只输出正面或负面。","answers":["正面"]}
+{"id":"s06","category":"sorting","prompt":"将3、1、2从小到大排序。只输出用英文逗号分隔的数字，不要空格。","answers":["1,2,3"]}
+{"id":"c01","category":"reasoning","prompt":"多步推理：一本书原价80元，先打七五折，再用10元优惠券。最终支付多少元？只输出整数。","answers":["50"]}
+{"id":"c02","category":"reasoning","prompt":"多步推理：小明有12个苹果，送出三分之一，又买回5个。现在有几个？只输出整数。","answers":["13"]}
+{"id":"c03","category":"constraints","prompt":"约束规划：A、B、C三个任务，A耗时2小时，B耗时3小时，C耗时1小时。B必须在A完成后启动，C必须在B完成后启动。完成全部任务至少几小时？只输出整数。","answers":["6"]}
+{"id":"c04","category":"logic","prompt":"多步推理：所有甲都是乙，没有乙是丙。是否可能有甲是丙？只输出可能或不可能。","answers":["不可能"]}
+{"id":"c05","category":"reasoning","prompt":"多步推理：一个班有30人，18人喜欢数学，15人喜欢物理，8人两者都喜欢。两者都不喜欢的有几人？只输出整数。","answers":["5"]}
+{"id":"c06","category":"reasoning","prompt":"多步推理：甲乙各以每小时3千米和5千米的速度从相距16千米的两地同时相向出发。几小时后相遇？只输出整数。","answers":["2"]}

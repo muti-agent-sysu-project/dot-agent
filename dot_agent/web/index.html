@@ -3,59 +3,156 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>端云协同智能体 · 路由演示面板</title>
-<link rel="stylesheet" href="/style.css">
+<title>端云协同智能体 · 实验台</title>
+<link rel="stylesheet" href="/style.css?v=6">
+<link rel="stylesheet" href="/vendor/katex/katex.min.css">
 </head>
 <body>
 <div class="layout">
   <header class="app">
-    <h1>端云协同智能体 · 路由演示面板</h1>
+    <h1>端云协同智能体 · 实验台</h1>
     <span class="runtime-badge" id="runtime">运行时检测中…</span>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-tab="run">运行</button>
+      <button class="tab" data-tab="batch">批量测试</button>
+      <button class="tab" data-tab="records">记录与统计</button>
+    </nav>
   </header>
 
-  <div class="query-box">
-    <textarea id="query" placeholder="输入任务，例如：一个班30人，每5人一组，共多少组？"></textarea>
-    <button class="run" id="run">运行</button>
-  </div>
-
-  <div class="examples" id="examples"></div>
-
-  <div class="card">
-    <h2>结果 <span class="path-badge" id="path"></span></h2>
-    <div class="answer" id="answer">—</div>
-  </div>
-
-  <div class="card" style="grid-column: 1 / -1">
-    <h2>三指标（本次请求）</h2>
-    <div class="tiles">
-      <div class="card tile"><div class="label">完整响应时间 C_time</div><div class="value" id="t-ctime">–</div><div class="sub" id="t-ctime-sub"></div></div>
-      <div class="card tile"><div class="label">云端 token C_API</div><div class="value" id="t-capi">–</div><div class="sub" id="t-capi-sub"></div></div>
-      <div class="card tile"><div class="label">本地调用次数</div><div class="value" id="t-local">–</div><div class="sub" id="t-local-sub"></div></div>
-      <div class="card tile"><div class="label">任务类型 / 路径</div><div class="value" id="t-label" style="font-size:19px">–</div><div class="sub" id="t-label-sub"></div></div>
+  <!-- ===================== 标签页 1：单次运行 ===================== -->
+  <section id="tab-run" class="tab-body">
+    <div class="query-box">
+      <textarea id="query" placeholder="输入任务，例如：一个班30人，每5人一组，共多少组？"></textarea>
+      <button class="run" id="run">运行</button>
     </div>
-  </div>
 
-  <div class="card" style="grid-column: 1 / -1">
-    <h2>子任务依赖图（拓扑分层 · 同层并行）</h2>
-    <div class="dag-wrap" id="dag"></div>
-    <div class="legend">
-      <span><span class="swatch" style="background:var(--md)"></span>MD 本地小模型</span>
-      <span><span class="swatch" style="background:var(--mc)"></span>MC 云端大模型</span>
-      <span class="muted">悬停节点查看子任务答案</span>
+    <details class="card source-input">
+      <summary>附带资料（可选）</summary>
+      <label for="sources">粘贴原文，每段资料之间留一个空行。系统自动编号，答案会显示引用。</label>
+      <textarea id="sources" rows="5" placeholder="第一段原文
+
+第二段原文"></textarea>
+      <label for="selector">资料选择方式</label>
+      <select id="selector">
+        <option value="bm25">关键词检索（BM25，默认）</option>
+        <option value="local">本地小模型选择</option>
+      </select>
+    </details>
+
+    <div class="examples" id="examples"></div>
+
+    <div class="card">
+      <h2>结果 <span class="path-badge" id="path"></span> <span class="muted" id="record-id"></span></h2>
+      <div class="answer" id="answer">—</div>
+      <div class="muted" id="source-trace" aria-live="polite"></div>
     </div>
-  </div>
 
-  <div class="card">
-    <h2>决策时间线</h2>
-    <ul class="trace" id="trace"></ul>
-  </div>
+    <div class="card" style="grid-column: 1 / -1">
+      <h2>四指标（本次请求）</h2>
+      <div class="tiles">
+        <div class="card tile"><div class="label">完整响应时间 C_time</div><div class="value" id="t-ctime">–</div><div class="sub" id="t-ctime-sub"></div></div>
+        <div class="card tile"><div class="label">云端 token C_API</div><div class="value" id="t-capi">–</div><div class="sub" id="t-capi-sub"></div></div>
+        <div class="card tile"><div class="label">本地调用次数</div><div class="value" id="t-local">–</div><div class="sub" id="t-local-sub"></div></div>
+        <div class="card tile"><div class="label">敏感实体披露</div><div class="value" id="t-priv">–</div><div class="sub" id="t-priv-sub"></div></div>
+        <div class="card tile"><div class="label">任务类型 / 路径</div><div class="value" id="t-label" style="font-size:19px">–</div><div class="sub" id="t-label-sub"></div></div>
+      </div>
+    </div>
 
-  <div class="card">
-    <h2>历史请求</h2>
-    <div id="history"><div class="muted">暂无</div></div>
-  </div>
+    <div class="card" id="privacy-card" style="grid-column: 1 / -1; display: none">
+      <h2>隐私执行明细</h2>
+      <div class="tiles" id="priv-tiles"></div>
+      <h3>各子任务云端所见（假名化对比）</h3>
+      <div id="priv-views"><div class="muted">本次无云端转交</div></div>
+    </div>
+
+    <div class="card" style="grid-column: 1 / -1">
+      <h2>子任务依赖图（拓扑分层 · 同层并行）</h2>
+      <div class="dag-wrap" id="dag"></div>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--md)"></span>MD 本地小模型</span>
+        <span><span class="swatch" style="background:var(--mc)"></span>MC 云端大模型</span>
+        <span class="muted">悬停节点查看子任务答案</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>决策时间线</h2>
+      <ul class="trace" id="trace"></ul>
+    </div>
+
+    <div class="card" style="grid-column: 1 / -1" id="proc-card">
+      <h2>完整中间过程</h2>
+      <div class="proc-grid">
+        <div>
+          <h3>阶段耗时</h3>
+          <div id="stages" class="stages"><div class="muted">运行后显示</div></div>
+        </div>
+        <div>
+          <h3>子任务明细</h3>
+          <div id="subdetail" class="subdetail"><div class="muted">运行后显示</div></div>
+        </div>
+      </div>
+      <h3>逐次模型调用 <span class="muted" id="callcount"></span></h3>
+      <div class="table-wrap"><table class="calls" id="calls"><tbody><tr><td class="muted">运行后显示</td></tr></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ===================== 标签页 2：批量测试 ===================== -->
+  <section id="tab-batch" class="tab-body" hidden>
+    <div class="card" style="grid-column: 1 / -1">
+      <h2>批量执行</h2>
+      <label for="batch-queries">每行一条查询，最多 50 条；串行执行，逐条落盘为实验记录。</label>
+      <textarea id="batch-queries" rows="8" placeholder="一个班30人, 每5人一组共多少组?
+12*(3+4) 等于多少?
+预算500元以内, 周六出发两日游, 每天不超过3个景点, 请给出方案花费"></textarea>
+      <div class="row">
+        <button class="run" id="batch-run">批量运行</button>
+        <span class="muted" id="batch-progress"></span>
+      </div>
+      <div class="table-wrap"><table class="calls" id="batch-table"><tbody><tr><td class="muted">尚未运行</td></tr></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ===================== 标签页 3：记录与统计 ===================== -->
+  <section id="tab-records" class="tab-body" hidden>
+    <div class="card" style="grid-column: 1 / -1">
+      <h2>汇总统计（当前筛选范围）</h2>
+      <div class="tiles" id="stats-tiles"><div class="muted">加载中…</div></div>
+      <div class="muted" id="stats-dist"></div>
+    </div>
+
+    <div class="card" style="grid-column: 1 / -1">
+      <h2>实验记录</h2>
+      <div class="filters">
+        <select id="f-label"><option value="">全部类型</option></select>
+        <select id="f-path"><option value="">全部路径</option></select>
+        <select id="f-success">
+          <option value="">成败不限</option>
+          <option value="1">仅成功</option>
+          <option value="0">仅失败</option>
+        </select>
+        <input id="f-q" placeholder="查询关键词…">
+        <button id="f-apply">筛选</button>
+        <span class="spacer"></span>
+        <a class="chip" href="/api/export?format=jsonl&exclude_simulated=1" download>导出 JSONL（仅真实）</a>
+        <a class="chip" href="/api/export?format=csv&exclude_simulated=1" download>导出 CSV（仅真实）</a>
+        <a class="chip" href="/api/export?format=jsonl" download>全部</a>
+      </div>
+      <div class="table-wrap"><table class="calls" id="runs-table"><tbody><tr><td class="muted">加载中…</td></tr></tbody></table></div>
+
+      <h3>记录对比</h3>
+      <div class="filters">
+        <select id="diff-a"><option value="">记录 A…</option></select>
+        <select id="diff-b"><option value="">记录 B…</option></select>
+        <button id="diff-run">对比</button>
+      </div>
+      <div id="diff-out"><div class="muted">选择两条记录后对比：指标并排 + 差异高亮。</div></div>
+    </div>
+  </section>
 </div>
 
-<script src="/app.js"></script>
+<script src="/vendor/marked.min.js"></script>
+<script src="/vendor/katex/katex.min.js"></script>
+<script src="/app.js?v=6"></script>
 </body>
 </html>

@@ -1,0 +1,28 @@
+{
+  "mode": "local",
+  "path": [
+    "local"
+  ],
+  "route_reason": "baseline",
+  "success": true,
+  "answer": "42",
+  "model": "qwen-local",
+  "cloud_tokens": 0,
+  "unknown_usage_calls": 0,
+  "elapsed_ms": 83.51001143455505,
+  "calls": [
+    {
+      "model": "qwen-local",
+      "elapsed_ms": 83.436980843544,
+      "prompt_tokens": 42,
+      "completion_tokens": 3,
+      "total_tokens": 45,
+      "success": true,
+      "attempted": true,
+      "error": null,
+      "finish_reason": "stop",
+      "role": "local"
+    }
+  ],
+  "simulated": false
+}

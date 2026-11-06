@@ -5,13 +5,23 @@
   - 无信号      → 策略默认倾向（bias）
   - score > θ   → 云端；否则本地
   - PLANNING 用更低阈值（偏云端），TOOLUSE 默认本地先试、失败升级
-阈值 θ 在验证集上扫描；消融时 v0 规则路由即"无信号 + 仅 bias"。
+
+θ 来源（优先级从高到低）：
+  1. 显式传入的 theta_overrides（评测消融用）
+  2. config/router_theta.json（scripts/calibrate_theta.py 的标定产物）
+  3. POLICY 表里的默认值
+
+消融时 v0 规则路由即"无信号 + 仅 bias"。
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 
 from ..types import Label, ModelTier, SignalScores
+
+THETA_CONFIG = Path(__file__).resolve().parents[2] / "config" / "router_theta.json"
 
 
 @dataclass(frozen=True)
@@ -35,6 +45,27 @@ POLICY: dict[Label, Policy] = {
 }
 
 
+def load_theta_overrides(path: Path | None = None) -> dict[Label, float]:
+    """读标定产物 config/router_theta.json；不存在或格式不对返回空（用默认值）。"""
+    p = path or THETA_CONFIG
+    try:
+        raw = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[Label, float] = {}
+    for key, value in raw.items():
+        try:
+            label = Label(key)
+            theta = float(value)
+        except (ValueError, TypeError):
+            continue
+        if 0.0 < theta < 1.0:
+            out[label] = theta
+    return out
+
+
 @dataclass
 class Decision:
     tier: ModelTier
@@ -44,19 +75,30 @@ class Decision:
 
 
 class Router:
-    def __init__(self, theta_default: float = 0.5) -> None:
-        self.theta_default = theta_default
+    def __init__(self, theta_overrides: dict[Label, float] | None = None) -> None:
+        # 标定值覆盖 POLICY 默认；显式传入优先于配置文件
+        calibrated = load_theta_overrides()
+        self._theta: dict[Label, float] = {}
+        for label, policy in POLICY.items():
+            if theta_overrides and label in theta_overrides:
+                self._theta[label] = theta_overrides[label]
+            elif label in calibrated:
+                self._theta[label] = calibrated[label]
+            else:
+                self._theta[label] = policy.theta
 
     def assign(self, label: Label, signals: SignalScores | None) -> Decision:
         policy = POLICY[label]
+        theta = self._theta[label]
         if signals is None:
             return Decision(policy.bias, policy, None, "no_signal→bias")
         score = signals.difficulty()
         if score is None:
             return Decision(policy.bias, policy, None, "no_valid_signal→bias")
-        tier = ModelTier.MC if score > policy.theta else ModelTier.MD
+        tier = ModelTier.MC if score > theta else ModelTier.MD
+        origin = "标定" if theta != policy.theta else "默认"
         reason = (
-            f"score={score:.2f} {'>' if score > policy.theta else '<='}"
-            f" θ={policy.theta} → {tier.value}"
+            f"score={score:.2f} {'>' if score > theta else '<='}"
+            f" θ={theta:.2f}({origin}) → {tier.value}"
         )
         return Decision(tier, policy, score, reason)

@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-21",
+  "base_commit": "3490928c5375ff4b7bf3ca5a5f14df4acbb36f1d",
+  "branch": "integration/unified-evidence-20261021",
+  "status": "implemented; offline verified; two review findings fixed and re-reviewed",
+  "tests": {
+    "command": "python -m pytest tests -q -p no:cacheprovider --basetemp .pytest-unified-reviewed-final --tb=short",
+    "exit_code": 0,
+    "passed": 82,
+    "subtests_passed": 7,
+    "seconds": 16.7
+  },
+  "browser": {
+    "scenarios": [
+      "BM25 source QA and citations",
+      "local index selector",
+      "same question with changed sources",
+      "mobile width without horizontal overflow",
+      "legacy decomposition after source QA"
+    ],
+    "consoleErrors": [],
+    "simulated": true
+  },
+  "demo": {
+    "units": 8,
+    "successes": 8,
+    "usage_kind": "simulated",
+    "scored_units": 0,
+    "summary": "reports/unified-evidence-demo-reviewed-20261021/summary.json"
+  },
+  "js_syntax_check": "passed",
+  "git_diff_check": "passed",
+  "real_model_requests_this_task": 0,
+  "formal_stage5_units_this_task": 0,
+  "not_verified": [
+    "real backend generation",
+    "real quality/token/latency benefit",
+    "provider billing"
+  ],
+  "git_state": "uncommitted; not pushed",
+  "review": {
+    "initial_findings": 2,
+    "fixed": 2,
+    "re_review": "passed within requested scope; no new confirmed P1/P2"
+  }
+}

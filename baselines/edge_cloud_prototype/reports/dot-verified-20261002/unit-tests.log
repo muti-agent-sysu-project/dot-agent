@@ -1,0 +1,44 @@
+test_changed_prompt_with_original_answers_is_rejected (test_dataset_protocol.DatasetProtocolTests.test_changed_prompt_with_original_answers_is_rejected) ... ok
+test_archive_extracts_regular_file (test_deployment.DeploymentTests.test_archive_extracts_regular_file) ... ok
+test_archive_rejects_escape_and_external_link (test_deployment.DeploymentTests.test_archive_rejects_escape_and_external_link) ... ok
+test_artifact_digest_and_size_required (test_deployment.DeploymentTests.test_artifact_digest_and_size_required) ... ok
+test_preflight_rejects_windows_before_tools_or_downloads (test_deployment.DeploymentTests.test_preflight_rejects_windows_before_tools_or_downloads) ... ok
+test_server_target_registered_with_upstream_tools_dependency (test_deployment.DeploymentTests.test_server_target_registered_with_upstream_tools_dependency) ... 在实例内编译CUDA服务，进度见 runtime/build.log。
+ok
+test_source_build_requires_cuda_and_propagates_failure (test_deployment.DeploymentTests.test_source_build_requires_cuda_and_propagates_failure) ... 在实例内编译CUDA服务，进度见 runtime/build.log。
+ok
+test_aggregate_cloud_error_has_no_retry (test_dot.DoTTests.test_aggregate_cloud_error_has_no_retry) ... ok
+test_budget_exceeded_fallback_and_no_external_call_if_original_too_large (test_dot.DoTTests.test_budget_exceeded_fallback_and_no_external_call_if_original_too_large) ... ok
+test_config_bounds_and_example (test_dot.DoTTests.test_config_bounds_and_example) ... ok
+test_decomposition_http_failure_stops_without_retry (test_dot.DoTTests.test_decomposition_http_failure_stops_without_retry) ... ok
+test_demo_dot_is_simulated_with_unknown_cloud_usage (test_dot.DoTTests.test_demo_dot_is_simulated_with_unknown_cloud_usage) ... ok
+test_invalid_plan_degrades_once_and_boundaries (test_dot.DoTTests.test_invalid_plan_degrades_once_and_boundaries) ... ok
+test_local_failure_upgrades_once_and_cloud_failure_stops (test_dot.DoTTests.test_local_failure_upgrades_once_and_cloud_failure_stops) ... ok
+test_missing_usage_and_evaluation_linkage (test_dot.DoTTests.test_missing_usage_and_evaluation_linkage) ... ok
+test_plan_execute_in_order_and_aggregate_with_ids (test_dot.DoTTests.test_plan_execute_in_order_and_aggregate_with_ids) ... ok
+test_planner_prompt_uses_configured_subtask_limit (test_dot.DoTTests.test_planner_prompt_uses_configured_subtask_limit) ... ok
+test_empty_secret_rejected_without_echo (test_run_autodl.RunAutoDLTests.test_empty_secret_rejected_without_echo) ... ok
+test_key_is_loaded_into_environment_only (test_run_autodl.RunAutoDLTests.test_key_is_loaded_into_environment_only) ... ok
+test_public_readable_secret_rejected (test_run_autodl.RunAutoDLTests.test_public_readable_secret_rejected) ... ok
+test_bad_json_and_empty (test_system.SystemTests.test_bad_json_and_empty) ... ok
+test_complex_direct_to_cloud (test_system.SystemTests.test_complex_direct_to_cloud) ... ok
+test_demo_cannot_be_presented_as_real_zero_cost (test_system.SystemTests.test_demo_cannot_be_presented_as_real_zero_cost) ... ok
+test_duplicate_tasks_rejected (test_system.SystemTests.test_duplicate_tasks_rejected) ... ok
+test_evaluation_records_failures_and_prevents_overwrite (test_system.SystemTests.test_evaluation_records_failures_and_prevents_overwrite) ... ok
+test_failed_cloud_unknown_cost_and_no_retry (test_system.SystemTests.test_failed_cloud_unknown_cost_and_no_retry) ... ok
+test_invalid_endpoint_and_generation_settings (test_system.SystemTests.test_invalid_endpoint_and_generation_settings) ... ok
+test_invalid_mode_and_blank_input (test_system.SystemTests.test_invalid_mode_and_blank_input) ... ok
+test_local_failure_upgrades_once (test_system.SystemTests.test_local_failure_upgrades_once) ... ok
+test_missing_cloud_no_fabricated_response (test_system.SystemTests.test_missing_cloud_no_fabricated_response) ... ok
+test_missing_key_stops_before_request (test_system.SystemTests.test_missing_key_stops_before_request) ... ok
+test_missing_usage_is_unknown (test_system.SystemTests.test_missing_usage_is_unknown) ... ok
+test_protocol_chinese_and_auth (test_system.SystemTests.test_protocol_chinese_and_auth) ... ok
+test_redirect_not_followed (test_system.SystemTests.test_redirect_not_followed) ... ok
+test_scoring_requires_whole_answer (test_system.SystemTests.test_scoring_requires_whole_answer) ... ok
+test_three_modes_and_cloud_cost (test_system.SystemTests.test_three_modes_and_cloud_cost) ... ok
+test_truncated_not_counted_as_success_but_usage_counted (test_system.SystemTests.test_truncated_not_counted_as_success_but_usage_counted) ... ok
+
+----------------------------------------------------------------------
+Ran 37 tests in 3.211s
+
+OK

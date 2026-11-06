@@ -6,6 +6,9 @@
 from __future__ import annotations
 
 import re
+import json
+
+from ..orchestrator.evidence import REQUEST_MARKER, select_packet
 
 from ..types import Caller
 
@@ -26,6 +29,12 @@ def _task_line(prompt: str) -> str:
 
 
 def local_demo_behavior(prompt: str, caller: Caller) -> str | None:
+    if caller is Caller.EVIDENCE_SELECT:
+        payload = json.loads(prompt.split(REQUEST_MARKER, 1)[1])
+        packet = select_packet(payload["query"], payload["sources"])
+        indices = [i for i, source in enumerate(payload["sources"])
+                   if source["source_id"] in packet.source_ids]
+        return json.dumps({"evidence_indices": indices})
     task = _task_line(prompt)
 
     if caller is Caller.CLASSIFY:
@@ -55,5 +64,10 @@ def local_demo_behavior(prompt: str, caller: Caller) -> str | None:
 
 
 def cloud_demo_behavior(prompt: str, caller: Caller) -> str | None:
+    if caller in (Caller.EVIDENCE_ANSWER, Caller.EVIDENCE_FALLBACK):
+        payload = json.loads(prompt.split(REQUEST_MARKER, 1)[1])
+        source = select_packet(payload["query"], payload["sources"], max_sources=1).sources[0]
+        return json.dumps({"answer": "【模拟回答】" + source["text"][:240],
+                           "citations": [source["source_id"]]}, ensure_ascii=False)
     head = prompt.splitlines()[0][:36]
     return f"【云端解答】{head}… 答案: 42（stub 演示输出）"

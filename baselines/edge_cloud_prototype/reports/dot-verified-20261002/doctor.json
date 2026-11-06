@@ -1,0 +1,17 @@
+{
+  "local": {
+    "status": "ready",
+    "configured_model": "qwen-local",
+    "listed_models": [
+      "qwen-local"
+    ]
+  },
+  "cloud": {
+    "status": "ready",
+    "configured_model": "deepseek-flash",
+    "listed_models": [
+      "deepseek-flash",
+      "deepseek-v4-pro"
+    ]
+  }
+}

@@ -118,3 +118,65 @@ button.run:disabled { opacity: 0.5; cursor: wait; }
 .error { color: #d03b3b; }
 
 .muted { color: var(--text-muted); font-size: 12px; }
+
+/* Optional source input; reuse the existing card and form styling. */
+.source-input { grid-column: 1 / -1; }
+.source-input summary { cursor: pointer; font-weight: 600; }
+.source-input label { display: block; margin: 10px 0 5px; color: var(--text-secondary); }
+.source-input textarea { width: 100%; resize: vertical; padding: 10px; font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--grid); border-radius: 8px; }
+.source-input select { font: inherit; padding: 5px; }
+#source-trace { margin-top: 10px; overflow-wrap: anywhere; }
+
+/* ---------------- 完整中间过程 ---------------- */
+.proc-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 18px; }
+@media (max-width: 900px) { .proc-grid { grid-template-columns: 1fr; } }
+
+.stage-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 3px 0; }
+.stage-name { width: 92px; color: var(--text-secondary); flex: none; }
+.stage-row .bar { flex: 1; height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
+.stage-row .bar i { display: block; height: 100%; background: var(--md); }
+.stage-val { width: 56px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+
+.subdetail { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow: auto; }
+.sub-item { border-left: 2px solid var(--grid); padding: 4px 0 4px 10px; }
+.sub-head { font-size: 12.5px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sub-q { font-size: 12.5px; color: var(--text-primary); margin-top: 2px; }
+.sub-a { font-size: 12px; color: var(--text-muted); margin-top: 2px; white-space: pre-wrap; }
+
+.tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 9px; border: 1px solid var(--border); }
+.tag.local { background: var(--md-bg); color: var(--md); border-color: transparent; }
+.tag.cloud { background: var(--mc-bg); color: var(--mc); border-color: transparent; }
+.tag.warn { background: transparent; color: var(--text-secondary); }
+
+.table-wrap { overflow-x: auto; }
+table.calls { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.calls th, table.calls td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--grid); }
+table.calls th { color: var(--text-muted); font-weight: 500; }
+table.calls td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.answer.md p { margin: 0 0 8px; }
+.answer.md ul, .answer.md ol { margin: 0 0 8px 20px; padding: 0; }
+.answer.md pre { background: var(--grid); padding: 8px 10px; border-radius: 6px; overflow-x: auto; font-size: 12.5px; }
+.answer.md code { font-size: 12.5px; }
+.answer.md .katex-display { margin: 8px 0; overflow-x: auto; overflow-y: hidden; }
+
+/* 云端所见（隐私假名化展示） */
+.sub-view { margin-top: 4px; padding: 4px 8px; border: 1px dashed var(--border); border-radius: 6px; }
+.sub-view .tag { margin-bottom: 2px; }
+
+/* ================= 实验台：标签页 / 筛选 / 批量 ================= */
+.tabs { display: flex; gap: 6px; margin-left: auto; }
+.tab { border: 1px solid var(--border); background: transparent; color: var(--text-secondary);
+  padding: 5px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.tab.active { background: var(--md-bg); color: var(--md); border-color: transparent; }
+.tab-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+.tab-body[hidden] { display: none; }
+
+.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+.filters select, .filters input { background: var(--surface-1); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12.5px; }
+.filters .spacer { flex: 1; }
+.row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+
+/* 隐私明细里的云端所见块（子任务明细与隐私卡共用） */
+#priv-views .sub-view { margin-top: 6px; }

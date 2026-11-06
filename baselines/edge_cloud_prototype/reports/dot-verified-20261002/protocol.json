@@ -1,0 +1,53 @@
+{
+  "started_utc": "2026-10-02T14:00:23.036945+00:00",
+  "simulated": false,
+  "files_sha256": {
+    "config.deepseek.example.json": "8041a9d1eca37ca01f6af90b7f3359872958fdf9fd3e5a18bce3f6f8d162be85",
+    "data/dot_smoke.jsonl": "dd9f8cb480e8ae8d7a3ba0ae90a8b0a16518a9fd3af1eca8f7f5902354479638",
+    "EXPERIMENT_PROTOCOL.md": "9054b9dd19049980023e0ba357fd9d19ba51c475474dd24e81a2b817bcdf41ca",
+    "edge_cloud/__init__.py": "a999eb2ae57d2fcd5c604f0cf0d5b158aa6cd31d20f7465790fce8bf5374dd58",
+    "edge_cloud/__main__.py": "8d17b97a3e6dc5d190c19db1269716f8f8c86da67425ad6df3c8e6ee27840e59",
+    "edge_cloud/client.py": "ed3a8a97f41daa78c6f8a545a516d20579b8fb8fbdb580487d73b74840604cde",
+    "edge_cloud/config.py": "2c488a3c1d5601112803db2dd656e3e6f362c8ce2c376c9bab61240cc30d9555",
+    "edge_cloud/evaluation.py": "a682114806c5879d9505a589e10f791435a00f66ace9b501e8bb7c630e92873b",
+    "edge_cloud/system.py": "90d1f546ff33eeeeb38ba85a50e6cd15eca25cd0dec56dd8b000f7be33f85406",
+    "scripts/run_dot_experiment.py": "0897486de3e372fd4be3a856c6cf064f4c12d17a8224d109bb8f32b6022ca2a5",
+    "scripts/run_autodl.py": "349aef420deb560aa5f1738984bef7adc588f9f08f00b003ddb02c6095aaf851",
+    "scripts/check_dot_dataset.py": "916ce0ec6ed4cb094453ef4dc6b7eadaabdf6060a56ba9e39c90599f78de8b45"
+  },
+  "config": {
+    "local_model": "qwen-local",
+    "cloud_model": "deepseek-flash",
+    "max_tokens": 512,
+    "temperature": 0,
+    "system_prompt": "准确回答用户问题，遵守用户要求的输出格式。",
+    "long_prompt_chars": 300,
+    "complex_keywords": [
+      "证明",
+      "多步推理",
+      "约束规划",
+      "编写代码",
+      "代码实现",
+      "prove",
+      "write code"
+    ],
+    "fallback_on_local_error": true,
+    "dot_max_subtasks": 4,
+    "dot_context_max_bytes": 9000,
+    "dot_planner_max_tokens": 512,
+    "cloud_thinking": "disabled"
+  },
+  "modes": [
+    "local",
+    "cloud",
+    "hybrid",
+    "dot"
+  ],
+  "tasks": 6,
+  "repeats": 1,
+  "client_location": "AutoDL instance",
+  "instance_id": "6fcb40b7f5-2694e599",
+  "preflight_excluded_from_comparison": true,
+  "application_answer_cache": false,
+  "service_caches_controlled": false
+}

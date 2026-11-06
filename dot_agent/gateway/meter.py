@@ -75,7 +75,8 @@ class CallMeter:
         for l in self.logs:
             entry = by_caller[l.caller.value]
             entry["calls"] += 1
-            entry["tokens"] += l.prompt_tokens + l.completion_tokens
+            if not l.usage_missing:
+                entry["tokens"] += l.prompt_tokens + l.completion_tokens
         unknown = sum(1 for l in self.logs if l.usage_missing)
         fallbacks = sum(
             1 for l in self.logs
@@ -102,4 +103,19 @@ class CallMeter:
             ),
             "stage_latency_s": {k: round(v, 4) for k, v in self.stage_latency.items()},
             "by_caller": dict(by_caller),
+            # 逐次调用的完整记录：面板据此还原中间过程（只含元数据，不含提示词正文）
+            "calls": [
+                {
+                    "seq": i,
+                    "caller": l.caller.value,
+                    "tier": l.tier.value,
+                    "requested_tier": l.requested_tier.value,
+                    "in": None if l.usage_missing else l.prompt_tokens,
+                    "out": None if l.usage_missing else l.completion_tokens,
+                    "latency_s": round(l.latency_s, 3),
+                    "usage_missing": l.usage_missing,
+                    "note": l.note,
+                }
+                for i, l in enumerate(self.logs, 1)
+            ],
         }

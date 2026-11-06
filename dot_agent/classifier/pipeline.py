@@ -30,15 +30,26 @@ class ClassificationPipeline:
         self.accept_threshold = accept_threshold
         self.fast_conf_threshold = fast_conf_threshold
 
-    async def classify(self, query: str) -> Classification:
+    def classify_l1_stage(self, query: str) -> Classification | None:
+        """只跑 L1 规则层（零推理成本）；L1 不确定时返回 None。
+
+        None 表示"需要语义层"，由调用方决定走 L2 单独分类还是与分解
+        合并推理（TaskDecomposer.decompose_and_classify）——合并可省
+        一整段本地推理时延。
+        """
         features = extract_features(query, self.rules)
         label, conf = classify_l1(features, self.rules)
-
         if label is not None and conf >= self.accept_threshold:
             return Classification(
                 label=label, conf=conf, source="L1", features=features,
                 fast_path=(label is Label.QA and conf >= self.fast_conf_threshold),
             )
+        return None
 
+    async def classify(self, query: str) -> Classification:
+        features = extract_features(query, self.rules)
+        l1 = self.classify_l1_stage(query)
+        if l1 is not None:
+            return l1
         label2 = await self.l2.classify(query)
         return Classification(label=label2, conf=0.60, source="L2", features=features)

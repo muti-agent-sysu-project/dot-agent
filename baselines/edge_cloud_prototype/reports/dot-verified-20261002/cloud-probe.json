@@ -1,0 +1,91 @@
+{
+  "mode": "cloud",
+  "request_id": "604eb9a2-a167-4b40-accc-09cdb035400a",
+  "path": [
+    "cloud"
+  ],
+  "route_reason": "baseline",
+  "success": true,
+  "answer": "13",
+  "model": "deepseek-flash",
+  "cloud_tokens": 27,
+  "known_cloud_tokens_subtotal": 27,
+  "unknown_usage_calls": 0,
+  "local_tokens": 0,
+  "stage_metrics": {
+    "decompose": {
+      "cloud_tokens": 0,
+      "known_tokens_subtotal": 0,
+      "unknown_usage_calls": 0,
+      "attempts": 0,
+      "elapsed_ms": 0,
+      "local_tokens": 0,
+      "known_local_tokens_subtotal": 0,
+      "local_unknown_usage_calls": 0,
+      "local_attempts": 0,
+      "all_call_elapsed_ms": 0
+    },
+    "execute": {
+      "cloud_tokens": 27,
+      "known_tokens_subtotal": 27,
+      "unknown_usage_calls": 0,
+      "attempts": 1,
+      "elapsed_ms": 670.2897697687149,
+      "local_tokens": 0,
+      "known_local_tokens_subtotal": 0,
+      "local_unknown_usage_calls": 0,
+      "local_attempts": 0,
+      "all_call_elapsed_ms": 670.2897697687149
+    },
+    "aggregate": {
+      "cloud_tokens": 0,
+      "known_tokens_subtotal": 0,
+      "unknown_usage_calls": 0,
+      "attempts": 0,
+      "elapsed_ms": 0,
+      "local_tokens": 0,
+      "known_local_tokens_subtotal": 0,
+      "local_unknown_usage_calls": 0,
+      "local_attempts": 0,
+      "all_call_elapsed_ms": 0
+    },
+    "fallback": {
+      "cloud_tokens": 0,
+      "known_tokens_subtotal": 0,
+      "unknown_usage_calls": 0,
+      "attempts": 0,
+      "elapsed_ms": 0,
+      "local_tokens": 0,
+      "known_local_tokens_subtotal": 0,
+      "local_unknown_usage_calls": 0,
+      "local_attempts": 0,
+      "all_call_elapsed_ms": 0
+    }
+  },
+  "subtasks": [],
+  "events": [],
+  "upgrade_count": 0,
+  "degradation_count": 0,
+  "error": null,
+  "elapsed_ms": 670.6588566303253,
+  "calls": [
+    {
+      "model": "deepseek-flash",
+      "elapsed_ms": 670.2897697687149,
+      "prompt_tokens": 26,
+      "completion_tokens": 1,
+      "total_tokens": 27,
+      "success": true,
+      "attempted": true,
+      "error": null,
+      "finish_reason": "stop",
+      "role": "cloud",
+      "request_id": "604eb9a2-a167-4b40-accc-09cdb035400a",
+      "call_id": "e8b808c7-20df-412c-b0c4-c6aa9306d01c",
+      "stage": "execute",
+      "subtask_id": null,
+      "requested_model": "deepseek-flash"
+    }
+  ],
+  "simulated": false
+}

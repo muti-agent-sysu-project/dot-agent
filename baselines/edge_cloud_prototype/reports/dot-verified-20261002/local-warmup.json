@@ -1,0 +1,91 @@
+{
+  "mode": "local",
+  "request_id": "facde08d-c006-41b2-a5a8-189e8f71b4f9",
+  "path": [
+    "local"
+  ],
+  "route_reason": "baseline",
+  "success": true,
+  "answer": "7",
+  "model": "qwen-local",
+  "cloud_tokens": 0,
+  "known_cloud_tokens_subtotal": 0,
+  "unknown_usage_calls": 0,
+  "local_tokens": 42,
+  "stage_metrics": {
+    "decompose": {
+      "cloud_tokens": 0,
+      "known_tokens_subtotal": 0,
+      "unknown_usage_calls": 0,
+      "attempts": 0,
+      "elapsed_ms": 0,
+      "local_tokens": 0,
+      "known_local_tokens_subtotal": 0,
+      "local_unknown_usage_calls": 0,
+      "local_attempts": 0,
+      "all_call_elapsed_ms": 0
+    },
+    "execute": {
+      "cloud_tokens": 0,
+      "known_tokens_subtotal": 0,
+      "unknown_usage_calls": 0,
+      "attempts": 0,
+      "elapsed_ms": 0,
+      "local_tokens": 42,
+      "known_local_tokens_subtotal": 42,
+      "local_unknown_usage_calls": 0,
+      "local_attempts": 1,
+      "all_call_elapsed_ms": 88.434599339962
+    },
+    "aggregate": {
+      "cloud_tokens": 0,
+      "known_tokens_subtotal": 0,
+      "unknown_usage_calls": 0,
+      "attempts": 0,
+      "elapsed_ms": 0,
+      "local_tokens": 0,
+      "known_local_tokens_subtotal": 0,
+      "local_unknown_usage_calls": 0,
+      "local_attempts": 0,
+      "all_call_elapsed_ms": 0
+    },
+    "fallback": {
+      "cloud_tokens": 0,
+      "known_tokens_subtotal": 0,
+      "unknown_usage_calls": 0,
+      "attempts": 0,
+      "elapsed_ms": 0,
+      "local_tokens": 0,
+      "known_local_tokens_subtotal": 0,
+      "local_unknown_usage_calls": 0,
+      "local_attempts": 0,
+      "all_call_elapsed_ms": 0
+    }
+  },
+  "subtasks": [],
+  "events": [],
+  "upgrade_count": 0,
+  "degradation_count": 0,
+  "error": null,
+  "elapsed_ms": 88.7315571308136,
+  "calls": [
+    {
+      "model": "qwen-local",
+      "elapsed_ms": 88.434599339962,
+      "prompt_tokens": 40,
+      "completion_tokens": 2,
+      "total_tokens": 42,
+      "success": true,
+      "attempted": true,
+      "error": null,
+      "finish_reason": "stop",
+      "role": "local",
+      "request_id": "facde08d-c006-41b2-a5a8-189e8f71b4f9",
+      "call_id": "5ad74f2f-5312-44d4-896b-aa6816194cee",
+      "stage": "execute",
+      "subtask_id": null,
+      "requested_model": "qwen-local"
+    }
+  ],
+  "simulated": false
+}

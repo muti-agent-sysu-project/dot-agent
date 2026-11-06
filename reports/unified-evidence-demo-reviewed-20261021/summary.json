@@ -1,0 +1,53 @@
+{
+  "run_id": "evidence-74651aad3f0d",
+  "scope": "engineering-comparison; not formal Stage 5",
+  "units": 8,
+  "modes": [
+    "full",
+    "rule",
+    "bm25",
+    "local"
+  ],
+  "cohort_sha256": "4bd0afa3999943e5b5be0dc52eb24c88047db8ad52c7d7f44d2367f240b65db0",
+  "contains_simulation": true,
+  "usage_kind": "simulated",
+  "quality_metric": "normalized exact match when reference exists; simulation is unscored",
+  "by_mode": {
+    "full": {
+      "units": 2,
+      "successes": 2,
+      "scored_units": 0,
+      "exact_matches": 0,
+      "cloud_tokens_known_subtotal": 610,
+      "unknown_usage_calls": 0,
+      "total_time_s": 0.0375
+    },
+    "rule": {
+      "units": 2,
+      "successes": 2,
+      "scored_units": 0,
+      "exact_matches": 0,
+      "cloud_tokens_known_subtotal": 550,
+      "unknown_usage_calls": 0,
+      "total_time_s": 0.0192
+    },
+    "bm25": {
+      "units": 2,
+      "successes": 2,
+      "scored_units": 0,
+      "exact_matches": 0,
+      "cloud_tokens_known_subtotal": 550,
+      "unknown_usage_calls": 0,
+      "total_time_s": 0.0286
+    },
+    "local": {
+      "units": 2,
+      "successes": 2,
+      "scored_units": 0,
+      "exact_matches": 0,
+      "cloud_tokens_known_subtotal": 550,
+      "unknown_usage_calls": 0,
+      "total_time_s": 0.0592
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "local": {
+    "status": "ready",
+    "configured_model": "qwen-local",
+    "listed_models": [
+      "qwen-local"
+    ]
+  },
+  "cloud": {
+    "status": "not_configured"
+  }
+}
