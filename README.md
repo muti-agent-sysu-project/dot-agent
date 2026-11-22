@@ -100,5 +100,6 @@ python scripts/run_autodl.py server --host 127.0.0.1 --port 8765
 - 统一入口已有离线回归、浏览器模拟验收和合成资料对照；历史记录保留在 [离线验收](docs/UNIFIED_ACCEPTANCE_20261021.md)。
 - 2026-10-25 的部署已接通 Qwen3-4B、llama.cpp CUDA 与 DeepSeek `deepseek-flash`，两端短生成和普通任务网页链路已有真实观察。
 - 已观察的两项算术任务返回 6 组、48 平方米，本地调用 9 次、云端调用 0 次，流程耗时 1.746 秒。这是单题功能验收。
+- 2026-11-22 在本地 Qwen3-4B-Instruct-2507 上引入 DoT 启发的依赖图/关键步骤路由：`gsm8k_style` 10 题 signal/rule 均为 **9/10**，控制组 18 题 **17/18**，与本地/云端单模型持平；这是小样本 pilot，不是论文级结论。设计与边界见 [DoT 启发的端云编排](docs/DOT_INSPIRED_ROUTING.md)。
 - 当前部署的真实资料问答、失败路径与正式效率对照尚待完成；未宣称质量、云端 token 和完整时延联合改善。
 - 缓存主要是精确匹配与 TTL；天气和提醒是演示工具；当前真实接口未验证 alpha-quantile。通用评分、信号开关、阈值和完整计时仍有正式评测前需处理的边界，见 [交付说明](docs/RELEASE_20261025.md)。

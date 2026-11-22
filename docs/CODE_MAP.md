@@ -19,7 +19,7 @@
 | `dot_agent/classifier/` | L1/L2 分类与策略协调 | 调整分类规则、提示词或采纳条件 |
 | `config/classify_rules.json` | 外置分类规则 | 修改工具词、规划词等 |
 | `dot_agent/orchestrator/decomposer.py` | 子任务拆分 | 子任务格式与拆分提示 |
-| `dot_agent/orchestrator/scheduler.py` | 依赖图和拓扑层 | 检查依赖、保守退化、并发调度 |
+| `dot_agent/orchestrator/scheduler.py` | 依赖图、拓扑层与关键步骤（汇点）识别 | 检查依赖、保守退化、并发调度、`key_steps()` |
 | `dot_agent/orchestrator/signals.py` | 本地试答和一致性等信号 | 采样次数与信号消融 |
 | `dot_agent/orchestrator/router.py` | 策略表与端云分配 | 路由规则、阈值 |
 | `dot_agent/orchestrator/verify.py` | 输出与约束检查 | 避免把非空当成答案正确 |
@@ -38,7 +38,12 @@
 
 ![统一处理流程](assets/workflow.png)
 
-普通任务大致为：精确缓存 → 分类 → 快速试答，或拆分 → 依赖判断 → 调度/路由 → 校验/升级 → 本地汇总。
+普通任务大致为：精确缓存 → 分类 → 快速试答，或拆分 → 依赖判断 → 调度/路由 → 校验/升级 → 汇总。
+
+拆分/建图后的路由吸收了 DoT 的端云分工：每个子任务都携带原题与已完成答案；
+依赖判断默认走云端；依赖图的汇点（关键步骤）直接交云端；REASONING 只有一个
+汇点时，其答案直接作为最终答案；需要汇总时云端优先、本地与最后子任务兜底。
+设计与实测见 [DoT 启发的端云编排](DOT_INSPIRED_ROUTING.md)。
 
 资料任务为：验证 sources → BM25 或本地模型选择编号 → 回取原文及依赖表头 → 云端回答 → 检查格式和引用，必要时一次全文回退。它绕过普通拆分和旧问题缓存。
 

@@ -30,18 +30,52 @@ Executor = Callable[[SubTask, dict[str, str]], Awaitable[str]]
 
 
 class TaskScheduler:
-    def __init__(self, client: ModelClient) -> None:
+    def __init__(self, client: ModelClient, judge_client: ModelClient | None = None) -> None:
         self.client = client
+        # DoT 把依赖分析视为规划关键步骤：默认交给更强的一侧（云端），
+        # 图错了会让关键步骤识别和后续执行整体偏航。
+        self.judge_client = judge_client or client
 
     async def judge_deps(self, query: str, subtasks: list[SubTask]) -> list[tuple[str, str]] | None:
         listing = "\n".join(f"{st.id}: {st.description}" for st in subtasks)
         prompt = DEP_JUDGE_PROMPT.format(query=query, subtask_list=listing)
-        result = await self.client.generate(
+        result = await self.judge_client.generate(
             prompt, max_tokens=256, temperature=0.0, caller=Caller.DEP_JUDGE
         )
         edges = list(dict.fromkeys(_EDGE_RE.findall(result.text.replace("→", "->"))))
         # [(a, b), ...] —— findall 对两个分组返回 tuple
         return edges if edges else None
+
+    @staticmethod
+    def key_steps(subtasks: list[SubTask], edges: list[tuple[str, str]] | None) -> set[str]:
+        """返回依赖图汇点（无后继）的 id；图无效/成环时返回空集。
+
+        关键步骤由后续流水线交给云端执行。只在依赖图可信时启用，
+        避免分解退化或解析噪声把整题误判成关键步骤。
+        """
+        by_id = {st.id for st in subtasks}
+        valid = [(a, b) for a, b in (edges or [])
+                 if a in by_id and b in by_id and a != b]
+        if not valid:
+            return set()
+        indeg = {i: 0 for i in by_id}
+        succs: dict[str, set[str]] = {i: set() for i in by_id}
+        for a, b in valid:
+            succs[a].add(b)
+            indeg[b] += 1
+        queue = [i for i, d in indeg.items() if d == 0]
+        visited = 0
+        while queue:
+            node = queue.pop(0)
+            visited += 1
+            for nxt in succs[node]:
+                indeg[nxt] -= 1
+                if indeg[nxt] == 0:
+                    queue.append(nxt)
+        if visited != len(by_id):  # 有环，退化线性链时不标关键步骤
+            return set()
+        has_succ = {a for a, _ in valid}
+        return {i for i in by_id if i not in has_succ}
 
     @staticmethod
     def build_levels(
@@ -93,6 +127,10 @@ class TaskScheduler:
     ) -> dict[str, str]:
         edges = await self.judge_deps(query, subtasks)
         levels = self.build_levels(subtasks, edges)
+        # DoT 的关键步骤识别：依赖图汇点没有后继，其答案直接进入最终汇总。
+        key_ids = self.key_steps(subtasks, edges)
+        for st in subtasks:
+            st.key = st.id in key_ids
         answers: dict[str, str] = {}
         for batch in levels:  # 跨层串行，同层并行
             results = await asyncio.gather(

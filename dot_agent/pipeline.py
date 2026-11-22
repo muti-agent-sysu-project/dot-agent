@@ -61,7 +61,7 @@ class AgentPipeline:
         )
         self.classifier = ClassificationPipeline(SemanticClassifier(self.local))
         self.decomposer = TaskDecomposer(self.local)
-        self.scheduler = TaskScheduler(self.local)
+        self.scheduler = TaskScheduler(self.local, judge_client=self.cloud)
         self.router = Router(theta_default)
         self.signals = SignalCollector(self.local)
         self.verifier = Verifier()
@@ -166,23 +166,55 @@ class AgentPipeline:
 
         meter.stage("execute")
         answers = await self.scheduler.run(
-            query, subtasks, self._make_executor(cls, policy, guard, trace)
+            query, subtasks, self._make_executor(cls, policy, guard, trace, query)
         )
         meter.stage_end("execute")
 
-        # 5. 本地汇总（零云端成本）
+        # 5. 汇总：DoT 式“最终答案”提示 + 端云分工。
+        #    REASONING 只有一个汇点时，它就是要交付的最终答案，直接采用，
+        #    避免本地 4B 在二次汇总时抄错或截断；多汇点/其他类型才做汇总。
         meter.stage("summarize")
-        summary_prompt = (
-            f"原任务: {query}\n各子问题及答案:\n"
-            + "\n".join(f"{st.id}: {st.description} -> {answers[st.id]}" for st in subtasks)
-            + "\n请给出最终答案。"
-        )
-        final = await self.local.generate(
-            summary_prompt, max_tokens=256, temperature=0.0, caller=Caller.SUMMARIZE
-        )
+        key_tasks = [st for st in subtasks if st.key and st.answer.strip()]
+        direct_key = (cls.label is Label.REASONING and len(key_tasks) == 1
+                      and any(ch.isdigit() for ch in key_tasks[0].answer))
+        final_text = ""
+        summary_source = ""
+        if direct_key:
+            final_text = key_tasks[0].answer
+            summary_source = f"关键步骤 {key_tasks[0].id}"
+            trace.append(f"最终答案直接取唯一关键步骤 {key_tasks[0].id}")
+        else:
+            summary_prompt = (
+                f"原问题: {query}\n\n"
+                "已完成子问题及答案（可能出错，仅供核对）:\n"
+                + "\n".join(f"{st.id}: {st.description} -> {answers[st.id]}" for st in subtasks)
+                + "\n\n请独立解答原问题，不要直接照抄中间结果；"
+                "若中间结果与你的计算冲突，以你的计算为准。"
+                "\n只输出最终答案（数字或简短结论），不要解释、不要重复推理过程。"
+                "\n最终答案:"
+            )
+            summaries = ([("云端", self.cloud), ("本地", self.local)]
+                         if cls.label is Label.REASONING else
+                         [("本地", self.local), ("云端", self.cloud)])
+            for name, client in summaries:
+                try:
+                    result = await client.generate(
+                        summary_prompt, max_tokens=300, temperature=0.0,
+                        caller=Caller.SUMMARIZE,
+                    )
+                    final_text = result.text
+                    summary_source = name
+                    trace.append(f"{name}汇总完成")
+                    break
+                except RuntimeError as error:
+                    trace.append(f"{name}汇总失败[{error}] → 尝试下一档")
+            if not final_text:  # 两端都不可用：退化为最后一个子任务答案，不丢已得结果
+                final_text = answers[subtasks[-1].id] if subtasks else ""
+                summary_source = "最后子任务"
+                trace.append("两端汇总均失败 → 回退最后子任务答案")
         meter.stage_end("summarize")
-        trace.append("本地汇总完成")
-        self.cache.put(query, final.text, features.deterministic)
+        trace.append(f"汇总来源: {summary_source}")
+        self.cache.put(query, final_text, features.deterministic)
         subtask_data = [
             {
                 "id": st.id,
@@ -190,12 +222,13 @@ class AgentPipeline:
                 "deps": list(st.deps),
                 "assigned": st.assigned.value if st.assigned else None,
                 "level": st.level,
+                "key": st.key,
                 "status": st.status,
                 "answer": st.answer[:80],
             }
             for st in subtasks
         ]
-        return self._finalize(query, final.text, cls.label, "pipeline", trace, t0, subtask_data)
+        return self._finalize(query, final_text, cls.label, "pipeline", trace, t0, subtask_data)
 
     # ------------------------------------------------------------------ #
     def reset_meter(self) -> None:
@@ -217,7 +250,8 @@ class AgentPipeline:
         ok = sig.consistency == 1.0 and self.verifier.verify(verify_kind, query, greedy.text)
         return greedy.text, ok
 
-    def _make_executor(self, cls, policy, guard: EscalationGuard, trace: list[str]):
+    def _make_executor(self, cls, policy, guard: EscalationGuard, trace: list[str],
+                       query: str):
         label, verify_kind = cls.label, policy.verify
 
         async def executor(st: SubTask, ctx: dict[str, str]) -> str:
@@ -245,18 +279,45 @@ class AgentPipeline:
                     trace.append(f"{st.id} 升级额度耗尽 → 保留失败输出")
                     return tr.output
 
-            # 上下文裁剪：只注入直接前驱答案；超预算丢弃最早前驱（drop-oldest，
-            # 单调淘汰）。字节预算是保守近似——这是上下文装配策略而非计量，
-            # 计量仍只用后端真实 usage（吸收自团队 cloud-edge-agent 的预算思想）
-            kept = [d for d in st.deps if d in ctx]
+            # DoT 设计：每个子问题都携带原题与已完成答案，直接前驱单独强调，
+            # 避免小模型把子问题当成脱离原题的孤立问句（论文 solve_Sub_Question）。
+            # 超预算按完成顺序丢弃最早答案（drop-oldest），原题永不丢弃。
+            # 字节预算是上下文装配策略而非计量——计量仍只用后端真实 usage。
+            direct = set(st.deps)
+            kept = list(ctx)
             total_b = sum(len(ctx[d].encode("utf-8")) for d in kept)
-            headroom = self.context_budget_bytes - len(st.description.encode("utf-8"))
+            headroom = (self.context_budget_bytes
+                        - len(query.encode("utf-8"))
+                        - len(st.description.encode("utf-8")))
             while kept and total_b > headroom:
-                dropped_dep = kept.pop(0)
-                total_b -= len(ctx[dropped_dep].encode("utf-8"))
-                trace.append(f"{st.id} 上下文预算超限，丢弃最早前驱 {dropped_dep}")
-            ctx_part = "".join(f"\n已知 {d}: {ctx[d]}" for d in kept)
-            prompt = f"子问题: {st.description}{ctx_part}\n请给出简洁答案。"
+                dropped = kept.pop(0)
+                total_b -= len(ctx[dropped].encode("utf-8"))
+                trace.append(f"{st.id} 上下文预算超限，丢弃最早前驱 {dropped}")
+            solved = "\n".join(
+                f"{d}: {ctx[d]}" + ("（直接相关，重点参考）" if d in direct else "")
+                for d in kept
+            )
+            prompt = (
+                f"原问题: {query}\n\n"
+                + (f"已完成子问题的答案:\n{solved}\n\n" if solved else "")
+                + f"现在只需解决这个子问题: {st.description}\n"
+                "请结合原问题给出简洁、可直接使用的答案；不要重复题目，不要解释。"
+            )
+
+            # DoT 的关键步骤分配：依赖图汇点直接决定最终答案，优先交给云端。
+            # 云端失败时不中止整题，退回本地的信号/升级流程。
+            if st.key:
+                try:
+                    st.assigned = ModelTier.MC
+                    trace.append(f"{st.id} 关键步骤（汇点）→ 云端")
+                    return (
+                        await self.cloud.generate(
+                            prompt, max_tokens=512, temperature=0.0,
+                            caller=Caller.EXECUTE,
+                        )
+                    ).text
+                except RuntimeError as error:
+                    trace.append(f"{st.id} 云端关键步骤失败[{error}] → 本地执行")
 
             if self.use_signals:
                 sig, greedy = await self.signals.collect(prompt)

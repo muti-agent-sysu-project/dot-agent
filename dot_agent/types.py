@@ -97,6 +97,7 @@ class SubTask:
     answer: str = ""
     status: str = "pending"  # pending / running / done / failed
     level: int = 0           # 拓扑层级：同层可并行，跨层串行
+    key: bool = False        # 关键步骤（依赖图汇点）：直接决定最终答案
 
 
 @dataclass

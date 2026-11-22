@@ -64,6 +64,10 @@ def local_demo_behavior(prompt: str, caller: Caller) -> str | None:
 
 
 def cloud_demo_behavior(prompt: str, caller: Caller) -> str | None:
+    # 依赖判断默认走云端（DoT 规划分工）；demo 下复用本地桩的依赖边，
+    # 保持页面依赖图与真实部署一致，而不是退化成线性链。
+    if caller is Caller.DEP_JUDGE:
+        return local_demo_behavior(prompt, caller)
     if caller in (Caller.EVIDENCE_ANSWER, Caller.EVIDENCE_FALLBACK):
         payload = json.loads(prompt.split(REQUEST_MARKER, 1)[1])
         source = select_packet(payload["query"], payload["sources"], max_sources=1).sources[0]

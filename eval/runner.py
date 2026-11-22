@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import sys
 import time
 from datetime import datetime
@@ -49,12 +50,22 @@ def load_dataset(name: str) -> list[dict]:
     return rows
 
 
+def score_letter(answer: str, expected: str) -> bool:
+    """选项题判分：先找“答案/正确”附近的独立 A-D，再退回最后一个独立字母。"""
+    m = re.search(r"(?:答案|正确|answer|correct)[\s\S]{0,20}?\b([A-D])\b",
+                  answer, re.IGNORECASE)
+    if m:
+        return m.group(1).upper() == expected.upper()
+    letters = re.findall(r"(?i)\b([A-D])\b", answer)
+    return bool(letters) and letters[-1].upper() == expected.upper()
+
+
 def score_one(item: dict, answer: str) -> bool:
     kind = item["score"]
     if kind == "num":
         return answer_equiv(answer, item["expected"])
     if kind == "letter":
-        return normalize_answer(answer) == f"opt:{item['expected']}"
+        return score_letter(answer, item["expected"])
     if kind == "constraint":
         return check_constraints(answer, item.get("constraints", []))
     if kind == "contains":
@@ -80,28 +91,53 @@ class ModeRunner:
 
     async def run(self, item: dict) -> dict:
         if self.kind in ("rule", "signal"):
-            result = await self.pipeline.run(item["query"])
+            t0 = time.perf_counter()
+            try:
+                result = await self.pipeline.run(item["query"])
+            except Exception as e:
+                # 失败保留在分母里；已发生的调用仍计入成本
+                m = self.pipeline.meter.summarize(time.perf_counter() - t0)
+                self.pipeline.reset_meter()
+                return {
+                    "correct": False, "answer": "",
+                    "cloud_in": m["C_API_in"], "cloud_out": m["C_API_out"],
+                    "unknown": m["unknown_usage_calls"],
+                    "time_s": time.perf_counter() - t0,
+                    "error": type(e).__name__,
+                }
             m = result.metrics
             self.pipeline.reset_meter()
             return {
                 "correct": score_one(item, result.answer),
+                "answer": result.answer[:500],
                 "cloud_in": m["C_API_in"], "cloud_out": m["C_API_out"],
                 "unknown": m["unknown_usage_calls"],
                 "time_s": m["C_time_s"] or 0.0,
+                "error": None if result.success else (result.error or "pipeline_failed"),
             }
         t0 = time.perf_counter()
-        r = await self.client.generate(
-            item["query"], max_tokens=512, temperature=0.0, caller=Caller.EXECUTE
-        )
+        try:
+            r = await self.client.generate(
+                item["query"], max_tokens=512, temperature=0.0, caller=Caller.EXECUTE
+            )
+        except Exception as e:
+            return {
+                "correct": False, "answer": "",
+                "cloud_in": 0, "cloud_out": 0, "unknown": 0,
+                "time_s": time.perf_counter() - t0,
+                "error": type(e).__name__,
+            }
         dt = time.perf_counter() - t0
         cloud_in = r.prompt_tokens if self.client.tier is ModelTier.MC else 0
         cloud_out = r.completion_tokens if self.client.tier is ModelTier.MC else 0
         return {
             "correct": score_one(item, r.text),
+            "answer": r.text[:500],
             "cloud_in": 0 if r.usage_missing else cloud_in,
             "cloud_out": 0 if r.usage_missing else cloud_out,
             "unknown": int(r.usage_missing),
             "time_s": dt,
+            "error": None,
         }
 
 
@@ -115,6 +151,7 @@ def summarize(records: list[dict]) -> dict:
         "cloud_in": sum(r["cloud_in"] for r in records),
         "cloud_out": sum(r["cloud_out"] for r in records),
         "unknown": sum(r["unknown"] for r in records),
+        "errors": sum(1 for r in records if r.get("error")),
         "t_med": times[n // 2] if n else 0.0,
         "t_p95": times[p95_idx] if n else 0.0,
     }
@@ -127,7 +164,10 @@ async def run_round_robin(items: list[dict], runners: dict[str, ModeRunner]) -> 
     for i, item in enumerate(items):
         order = modes[i % len(modes):] + modes[: i % len(modes)]
         for mode in order:
-            results[mode].append(await runners[mode].run(item))
+            rec = await runners[mode].run(item)
+            results[mode].append(rec)
+            print(f"[{mode}] {item['id']} correct={rec['correct']} "
+                  f"error={rec.get('error') or '-'}", flush=True)
     return results
 
 
@@ -136,6 +176,9 @@ def main() -> None:
     parser.add_argument("--all", action="store_true", help="四模式全跑（默认仅烟测 signal 模式）")
     parser.add_argument("--run-id", default=None, help="实验分组名（进 SQLite 与报告文件名）")
     parser.add_argument("--output", default=None, help="报告路径（默认 eval/report-{run_id}.md，拒绝覆盖）")
+    parser.add_argument("--datasets", nargs="+", choices=DATASETS, default=DATASETS,
+                        help="只跑指定数据集子集（默认全部）")
+    parser.add_argument("--records", default=None, help="逐题记录 JSONL 路径（可选）")
     args = parser.parse_args()
 
     run_id = args.run_id or f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
@@ -152,10 +195,18 @@ def main() -> None:
         print("  ⚠ stub 模式——指标无实际意义，仅验证评测流程可跑通")
     asyncio.run(warmup_real(info, local, cloud))  # 真实模型预热，防冷启动污染 P95
 
-    all_items = [item for ds in DATASETS for item in load_dataset(ds)]
+    all_items = [item for ds in args.datasets for item in load_dataset(ds)]
     mode_names = ["signal", "rule", "local_only", "cloud_only"] if args.all else ["signal"]
     runners = {m: ModeRunner(m, local, cloud, run_id) for m in mode_names}
     results = asyncio.run(run_round_robin(all_items, runners))
+
+    if args.records:
+        with Path(args.records).open("w", encoding="utf-8") as writer:
+            for mode, recs in results.items():
+                for item, rec in zip(all_items, recs):
+                    writer.write(json.dumps({"id": item["id"], "mode": mode, **rec},
+                                            ensure_ascii=False) + "\n")
+        print(f"逐题记录: {args.records}")
 
     lines = [
         "# 评测报告",
@@ -163,14 +214,14 @@ def main() -> None:
         f"- 运行时: local={info['local']}, cloud={info['cloud']}",
         f"- run_id: {run_id}（逐题轮换模式执行顺序；原始记录见 data/metrics.db）",
         "",
-        "| 模式 | n | Acc | C_API(in/out) | unknown_usage | C_time 中位数(s) | C_time P95(s) |",
-        "|---|---|---|---|---|---|---|",
+        "| 模式 | n | Acc | C_API(in/out) | unknown_usage | errors | C_time 中位数(s) | C_time P95(s) |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for name in mode_names:
         s = summarize(results[name])
         lines.append(
             f"| {name} | {s['n']} | {s['acc']:.1%} | {s['cloud_in']}/{s['cloud_out']} "
-            f"| {s['unknown']} | {s['t_med']:.3f} | {s['t_p95']:.3f} |"
+            f"| {s['unknown']} | {s['errors']} | {s['t_med']:.3f} | {s['t_p95']:.3f} |"
         )
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n" + "\n".join(lines))
