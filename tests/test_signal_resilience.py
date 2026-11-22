@@ -71,12 +71,13 @@ def test_pipeline_survives_signal_failure():
     assert any("本地采样不可用" in line for line in result.trace)
 
 
-def test_pipeline_returns_failure_not_exception_when_local_dead():
+def test_pipeline_degrades_to_cloud_when_local_dead():
     dead = FailingClient(fail_callers=(Caller.SIGNAL, Caller.EXECUTE, Caller.SUMMARIZE,
                                        Caller.DECOMPOSE, Caller.DEP_JUDGE),
                          name="dead-local")
     agent = AgentPipeline(dead, _cloud(), run_id="test-local-dead")
     result = asyncio.run(agent.run("一个班30人，每5人一组共多少组？"))
-    assert result.success is False
-    assert result.error == "model_incomplete_answer"
-    assert result.path == "failed"
+    # 分解/依赖/关键步骤默认走云端；本地全挂时应降级完成而不是整题失败。
+    assert result.success is True
+    assert result.path in ("pipeline", "direct_cloud")
+    assert result.answer

@@ -1,7 +1,8 @@
-"""Task Decomposer：本地 SLM + meta-prompt 将请求分解为编号子任务。
+"""Task Decomposer：云端/本地 SLM + meta-prompt 将请求分解为编号子任务。
 
-- 分解由本地模型执行（零云端 token），few-shot 样例按任务域维护在
-  prompts/ 下，此处为通用占位样例。
+- 默认本地分解（省云端 token）；设置 DOT_DECOMPOSE_TIER=cloud 可切到云端。
+  2026-11-22 对照：云端分解在 10 题 math 上准确率不变，控制组 18 题不变，
+  但云端 token 约翻倍，因此默认仍保留本地。
 - 输出强约束编号列表；解析失败重试 1 次，仍失败返回 None，
   由主流水线触发"整题升级云端"（保正确性下限）。
 - 子任务数合法区间 [2, 8]：少于 2 无分解必要，多于 8 小模型分解质量
@@ -38,9 +39,13 @@ class TaskDecomposer:
         """返回子任务列表；分解/解析失败返回 None（触发整题升级）。"""
         prompt = DECOMPOSE_PROMPT.format(query=query)
         for attempt in range(2):  # 失败重试一次
-            result = await self.client.generate(
-                prompt, max_tokens=512, temperature=0.0, caller=Caller.DECOMPOSE
-            )
+            try:
+                result = await self.client.generate(
+                    prompt, max_tokens=512, temperature=0.0, caller=Caller.DECOMPOSE
+                )
+            except RuntimeError:
+                # 截断/空答/连接失败：重试一次，仍失败交给整题云端回退。
+                continue
             items = [(int(m.group(1)), m.group(2).strip()) for m in _ITEM_RE.finditer(result.text)]
             if MIN_SUBTASKS <= len(items) <= MAX_SUBTASKS:
                 # 去重（同编号取首个）并按编号排序

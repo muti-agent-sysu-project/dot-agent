@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -54,6 +56,8 @@ def _local(prompt: str, caller: Caller):
 
 
 def _cloud(prompt: str, caller: Caller):
+    if caller is Caller.DECOMPOSE:
+        return "1. 求头数\n2. 求兔数"
     if caller is Caller.DEP_JUDGE:
         return "s1 -> s2"
     if caller is Caller.EXECUTE:
@@ -61,15 +65,16 @@ def _cloud(prompt: str, caller: Caller):
     return "4"
 
 
-def _run():
+def _run(decompose_tier: str = "local"):
     local_calls: list[dict] = []
     cloud_calls: list[dict] = []
-    agent = AgentPipeline(
-        _recording_client(ModelTier.MD, local_calls, _local),
-        _recording_client(ModelTier.MC, cloud_calls, _cloud),
-        run_id="test-dot-routing", mode="signal",
-    )
-    result = asyncio.run(agent.run(QUERY))
+    with patch.dict(os.environ, {"DOT_DECOMPOSE_TIER": decompose_tier}):
+        agent = AgentPipeline(
+            _recording_client(ModelTier.MD, local_calls, _local),
+            _recording_client(ModelTier.MC, cloud_calls, _cloud),
+            run_id="test-dot-routing", mode="signal",
+        )
+        result = asyncio.run(agent.run(QUERY))
     return result, local_calls, cloud_calls
 
 
@@ -100,6 +105,34 @@ def test_single_key_step_becomes_final_answer_without_extra_summary():
     assert result.answer == "4只"
     assert any("唯一关键步骤" in line for line in result.trace)
     assert not [c for c in cloud_calls if c["caller"] is Caller.SUMMARIZE]
+
+
+def test_decompose_defaults_to_local():
+    _, local_calls, cloud_calls = _run()
+    assert [c for c in local_calls if c["caller"] is Caller.DECOMPOSE]
+    assert not [c for c in cloud_calls if c["caller"] is Caller.DECOMPOSE]
+
+
+def test_decompose_can_switch_to_cloud():
+    _, local_calls, cloud_calls = _run(decompose_tier="cloud")
+    assert [c for c in cloud_calls if c["caller"] is Caller.DECOMPOSE]
+    assert not [c for c in local_calls if c["caller"] is Caller.DECOMPOSE]
+
+
+def test_decompose_returns_none_when_model_keeps_failing():
+    from dot_agent.orchestrator.decomposer import TaskDecomposer
+
+    class DeadDecomposeClient(StubModelClient):
+        async def generate(self, prompt, *, max_tokens=512, temperature=0.0,
+                           caller=Caller.EXECUTE):
+            if caller is Caller.DECOMPOSE:
+                raise RuntimeError("model_incomplete_answer")
+            return await super().generate(
+                prompt, max_tokens=max_tokens, temperature=temperature, caller=caller
+            )
+
+    decomposer = TaskDecomposer(DeadDecomposeClient(ModelTier.MC, name="dead"))
+    assert asyncio.run(decomposer.decompose(QUERY)) is None
 
 
 if __name__ == "__main__":

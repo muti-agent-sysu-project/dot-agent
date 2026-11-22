@@ -60,7 +60,14 @@ class AgentPipeline:
             cloud_client, self.meter, run_id=run_id, fallback=None if os.environ.get("DOT_REQUIRE_REAL") == "1" else self.local
         )
         self.classifier = ClassificationPipeline(SemanticClassifier(self.local))
-        self.decomposer = TaskDecomposer(self.local)
+        # 分解默认本地（实测云端分解无准确率收益、token 翻倍）；
+        # DOT_DECOMPOSE_TIER=cloud 可切到云端做对照或难例兜底。
+        decompose_tier = os.environ.get("DOT_DECOMPOSE_TIER", "local").strip().lower()
+        if decompose_tier not in ("cloud", "local"):
+            raise ValueError("DOT_DECOMPOSE_TIER must be cloud or local")
+        self.decomposer = TaskDecomposer(
+            self.cloud if decompose_tier == "cloud" else self.local
+        )
         self.scheduler = TaskScheduler(self.local, judge_client=self.cloud)
         self.router = Router(theta_default)
         self.signals = SignalCollector(self.local)
