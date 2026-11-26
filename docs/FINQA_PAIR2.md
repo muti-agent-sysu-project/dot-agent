@@ -33,3 +33,33 @@ over those workspaces, not a population of 24 different financial algorithms. Cl
 prefix caches are physically shared; ledgers and skill libraries are logically isolated per arm.
 The six-worker end-to-end wall measurements include queueing. The service price is calculated from
 receipts, not an account invoice. GPU rental is separate.
+
+## Measured results, November 27 (Asia/Shanghai)
+
+Formal code 38e3f991fdd6d3a8fbbe93619edbb824e9ff52ac, profile SHA256
+e967b2893a4e1cae602199472febcad2f3ddce08df8792c35bf181a58f4d95c2.
+
+| Arm | Cold correct / 160 | Stream correct / 120 | Cold installations / 24 | Binding hits / 48 | ITT cloud tokens/task | ITT seconds/task |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| B0 | 64 | 79 | 0 | 0 | 0.0 | 0.902 |
+| B1 | 98 | 107 | 0 | 0 | 411.7 | 1.605 |
+| B6 | 96 | 120 | 0 | 0 | 345.2 | 2.183 |
+| B8 | 80 | 120 | 24 | 48 | 68.6 | 0.477 |
+| B9 v1 | 80 | 117 | 23 | 46 | 68.7 | 0.459 |
+| B9 v2 | 80 | 119 | 23 | 47 | 71.7 | 0.464 |
+
+Typed and minimal views yielded 95 and 94 successes over the same 160 snapshots. The paired
+minimal-minus-typed utility difference was -0.00625 (95% CI -0.025 to 0.0125). On the stream,
+the paired v2-minus-v1 utility difference was 0.0167 (95% family bootstrap CI -0.025 to 0.075).
+First-encounter installation counts were identical for the two B9 policies.
+
+The frozen closure protocol scored B6, B8 and B9 v2 at 0/24 with no violations. The B6 local
+judge enabled all 24 second steps; the hard boundary blocked all 24 and local recovery scored
+zero. For B8 and B9 v2 all 24 first outputs failed the integer-only binding contract. Their
+completion difference is uninformative about the second-step mechanism. In the independent
+closure development set both first-view format success rates were already zero. Future experiments
+need a development criterion for reaching the second decision in each comparison arm.
+
+Across development, probes and formal stages, 3,772 physical calls reconciled one-to-one,
+including 2,585 cloud calls, zero unknown receipts and USD 0.694126268 in token charges at the
+dated tariff. The elapsed probe-to-final-stream interval was 25.26 minutes. No GPU invoice is included.
