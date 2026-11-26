@@ -365,6 +365,10 @@ class Views:
 
 
 def factors(arm):
+    named = {"B9_no_S":(0,1,1,1),"B9_no_H":(1,0,1,1),"B9_no_D":(1,1,0,1),
+             "B9_no_K":(1,1,1,0),"B9_replan":(1,1,1,1)}
+    if arm in named:
+        return named[arm]
     if arm in ARMS:
         return {"B8_modular": (1,0,0,1), "B9_joint": (1,1,1,1)}.get(arm, (0,0,0,0))
     return tuple(map(int, arm.removeprefix("SHDK_")))
@@ -407,8 +411,17 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
     started = time.monotonic()
     arm = slot["arm"]
     s, h, d, k = factors(arm)
-    views = Views(task, cloud, f"{seed}/{slot['task_id']}")
+    from eval import finqa_workload as W
+    contract = "metric" in task
+    view_type = W.ContractViews if contract else Views
+    views = view_type(task, cloud, f"{seed}/{slot['task_id']}")
     full = arm == ARMS[1]
+    if contract:
+        profile = {**profile, **profile.get("_stream", {})}
+    elif views.rows:
+        kind = ("irrelevant_sensitive_control" if len(views.rows)==1 else "numeric_order_required"
+                if "highest priority" in task["instruction"] else "schema_id_linkage")
+        profile = {**profile, **profile.get("_by_structure", {}).get(kind, {})}
     selector, advice = views.selector(forced_view == "relation" if forced_view else s), views.advice(s)
     reference = views.offer(Action.FALLBACK, "full", task) if full else None
 
@@ -422,7 +435,7 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
     principal = slot["task_id"]
     review = views.reviewed
     weights = views.weights
-    if views.stream:
+    if views.stream and not contract:
         # Five frozen independent bindings with four protected field slots and the relation per instance.
         weights = {f"stream-{i}/{name}": 1 for i in range(5)
                    for name in ("field0","field1","field2","field3","selection")}
@@ -431,6 +444,8 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
         review = {key: {fact if fact in shared else principal+"/"+fact for fact in facts}
                   for key, facts in review.items()}
         principal = "synthetic-growth"
+    if contract:
+        principal = task["metric"]
     scope = Scope(arm + "/" + principal, arm + "/" + cloud.recipient, "finqa.v1")
     ledger = TrajectoryPrivacyLedger(weights)
     messages, attempts, local_usage = [], [], []
@@ -456,7 +471,7 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
         return body.decode()
     def local_call(data, prompt=PROMPT):
         steps.append("local")
-        c = local.candidate(Action.LOCAL, "local", data, prompt)
+        c = local.candidate(Action.LOCAL, "local", data, W.PROMPT if contract and prompt == PROMPT else prompt)
         out, usage = local.call(c.payload, uuid.uuid4().hex)
         local_usage.append(asdict(usage))
         return out
@@ -467,6 +482,9 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
     def forecast(state, candidate):
         delta = 0 if candidate.action == Action.LOCAL else quote(candidate)
         f = profile_for(mode, profile, candidate, delta, views.stream)
+        if h and candidate.action != Action.LOCAL and float(p0) + f.remaining_exposure > .25:
+            from dot_agent.collab.types import BudgetExhaustedError
+            raise BudgetExhaustedError("predicted continuation exceeds available disclosure")
         if not h:
             return Forecast(f.q_lower, f.failure_upper, f.remaining_tokens, f.remaining_seconds, float(delta), f.reuse_value)
         return f
@@ -476,12 +494,17 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
     else:
         controller = JointPrimalDualController(lambda *_: choices, forecast, quote, dynamic=bool(d), **options)
     prediction, reason = "", "ok"
-    values = growth_inputs(task) if views.stream else {}
+    values = growth_inputs(task) if views.stream and not contract else {}
     try:
-        hot = await library.hit(values) if library and k else None
+        event = "skill"
+        if contract:
+            replay = library.replay(task, arm == "B9_replan") if library and k else None
+            hot,event = replay or (None,event)
+        else:
+            hot = await library.hit(values) if library and k else None
         if hot is not None:
             prediction = hot
-            steps.append("skill")
+            steps.append(event)
         elif full:
             prediction = await send(reference)
         else:
@@ -521,7 +544,11 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
                 prediction = await send(continuations[normalized])
         raw_prediction = prediction
         prediction = resolve_output(prediction)
-        if library and k:
+        if contract:
+            prediction = W.resolve(raw_prediction,task)
+            if hot is None and library and k and library.learn(task,raw_prediction):
+                steps.append("compiled")
+        elif library and k:
             library.learn(values, prediction)
     except (CollaborationError, ValueError, OSError, KeyError) as exc:
         reason = type(exc).__name__

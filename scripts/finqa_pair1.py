@@ -80,9 +80,26 @@ class PooledEndpoint(R.Endpoint):
         return res.json()
 
 
+from contextlib import contextmanager
+
+
+@contextmanager
+def endpoints(meter):
+    import httpx
+    transport = httpx.HTTPTransport(retries=3, trust_env=False)
+    os.environ["COLLAB_CLOUD_API_KEY"] = Path(os.environ["FINQA_CLOUD_KEY_FILE"]).read_text().strip()
+    with httpx.Client(transport=transport, trust_env=False, timeout=httpx.Timeout(120,connect=8), follow_redirects=False) as client:
+        def endpoint(model,url,role):
+            ep = PooledEndpoint(model,url+"/chat/completions",role,"COLLAB_"+role.upper(),"deepseek-account")
+            object.__setattr__(ep,"client",client)
+            return MeteredEndpoint(ep,meter)
+        local = endpoint("Qwen/Qwen3-4B","http://127.0.0.1:8000/v1","local")
+        cloud = endpoint("deepseek-flash","https://api.deepseek.com/v1","cloud")
+        yield local,cloud
+
+
 def main():
     import fcntl
-    import httpx
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("stage", choices=("fit", "dev", "confirm"))
     parser.add_argument("dataset", type=Path)
@@ -128,15 +145,7 @@ def main():
                     temperature=0, max_tokens=R.CAP, thinking=False, cloud_limit_usd="3.50")
     R.dump(folder/"manifest.json",manifest)
     meter = Accounting(args.out)
-    transport = httpx.HTTPTransport(retries=3, trust_env=False)
-    os.environ["COLLAB_CLOUD_API_KEY"] = Path(os.environ["FINQA_CLOUD_KEY_FILE"]).read_text().strip()
-    with httpx.Client(transport=transport, trust_env=False, timeout=httpx.Timeout(120,connect=8), follow_redirects=False) as client:
-        def endpoint(model,url,role):
-            ep = PooledEndpoint(model,url+"/chat/completions",role,"COLLAB_"+role.upper(),"deepseek-account")
-            object.__setattr__(ep,"client",client)
-            return MeteredEndpoint(ep,meter)
-        local = endpoint("Qwen/Qwen3-4B","http://127.0.0.1:8000/v1","local")
-        cloud = endpoint("deepseek-flash","https://api.deepseek.com/v1","cloud")
+    with endpoints(meter) as (local,cloud):
         out_lock = threading.Lock()
         def run(slot):
             arm,view,t = slot["arm"],slot["forced_view"],slot["task_id"]
