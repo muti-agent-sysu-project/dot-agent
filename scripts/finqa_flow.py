@@ -19,14 +19,15 @@ ABLATIONS = ("B9_no_S","B9_no_H","B9_no_D","B9_no_K","B9_replan")
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("stage",choices=("flow-fit","flow-confirm"))
+    p.add_argument("stage",choices=("flow-fit","flow-dev","flow-confirm"))
     p.add_argument("root",type=Path)
+    p.add_argument("--pair2",action="store_true")
     args=p.parse_args()
     root=args.root
     lock=(root/".wave.lock").open("a")
     fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
     dev=args.stage=="flow-fit"
-    config=root/"calibrated_predictor_pair1_v2.json"
+    config=root/("calibrated_predictor_pair2.json" if args.pair2 else "calibrated_predictor_pair1_v2.json")
     profile={} if dev else json.loads(config.read_bytes())
     if not dev:
         gate=json.loads((root/"freeze.json").read_bytes())
@@ -34,17 +35,19 @@ def main():
             raise ValueError("unfrozen flow")
     folder=root/args.stage
     folder.mkdir(exist_ok=False)
-    packets,labels=W.generate(dev)
+    packets,labels=W.generate(dev or args.stage=="flow-dev")
     R.dump(folder/"inputs.json",packets)
     # Each job is a complete ordered flow; only independent policies are parallel.
     variants=([(R.ARMS[4],v,learn) for v in ("local","typed","relation","advice","fallback") for learn in (True,False)]
-              if dev else [(a,None,True) for a in (*R.ARMS,*ABLATIONS)])
+              if dev else [(a,None,True) for a in ((*R.ARMS,R.AMORTIZED,"B9_no_K","B9_replan") if args.pair2 else (*R.ARMS,*ABLATIONS))])
+    if args.stage=="flow-dev":
+        variants=[(a,None,True) for a in (R.ARMS[3],R.ARMS[4],R.AMORTIZED)]
     schedule=[]
     for arm,view,learn in variants:
         for t in packets:
             schedule.append(dict(arm=arm,forced_view=view,library_enabled=learn,task_id=t,repeat=0,
-                dataset="FinQA-Priv-contract-dev" if dev else "FinQA-Priv-contract-confirm",
-                model_pair="Qwen3-4B+deepseek-flash",phase="ablation" if arm in ABLATIONS else "stream",
+                dataset="FinQA-Priv-contract-dev" if args.stage!="flow-confirm" else "FinQA-Priv-contract-confirm",
+                model_pair="Qwen3-8B+deepseek-v4-pro" if args.pair2 else "Qwen3-4B+deepseek-flash",phase="ablation" if arm in ABLATIONS else "stream",
                 workload="stream", **dict(zip("SHDK",R.factors(arm)))))
     R.lines(folder/"schedule.jsonl",schedule)
     start=time.monotonic()
@@ -52,7 +55,7 @@ def main():
                   schedule_sha256=digest(folder/"schedule.jsonl"), profile_sha256=digest(config) if not dev else None,
                   code=subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),workers=6)
     R.dump(folder/"manifest.json",manifest)
-    meter=Accounting(root)
+    meter=Accounting(root,args.pair2)
     write=threading.Lock()
     with endpoints(meter) as (local,cloud):
         def run(variant):
@@ -64,6 +67,8 @@ def main():
             for slot in schedule:
                 if (slot["arm"],slot["forced_view"],slot["library_enabled"])!=variant:
                     continue
+                if meter.stop:
+                    raise RuntimeError("stage circuit open")
                 t=slot["task_id"]
                 packet=packets[t]
                 row,pred,wires,prices=asyncio.run(R.episode(slot,packet,local,cloud,journal,library,

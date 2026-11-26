@@ -64,7 +64,31 @@ def fit_prices(rows,profile):
     return {"_prices":prices,"_quality_floor":floor,"_price_fit":performance,"_grid_cells":len(cells)}
 
 
-def calibrate(root):
+def amortization(rows, gamma=.9):
+    """Paired development ITT for four future opportunities, including failed builds."""
+    by_family = {}
+    metrics = ("reserved_or_billed_tokens", "L_s", "delta_p")
+    for row in rows:
+        if not row["task_id"].startswith("dev-flow-"):
+            raise ValueError("development streams only")
+        index = int(row["task_id"].rsplit("-", 1)[1])
+        cell = by_family.setdefault(row["family_id"], {})
+        key = (index, row["library_enabled"])
+        if key in cell:
+            raise ValueError("duplicate paired flow observation")
+        cell[key] = row
+    expected = {(j,on) for j in range(5) for on in (True,False)}
+    if not by_family or any(cell.keys() != expected for cell in by_family.values()):
+        raise ValueError("incomplete paired development flows")
+    def saving(j,metric):
+        return fmean(cell[j,False][metric]-cell[j,True][metric] for cell in by_family.values())
+    premium = [max(0., -saving(0,m)) for m in metrics]
+    gross = [sum(gamma**j * saving(j,m) for j in range(1,5)) for m in metrics]
+    return dict(metrics=metrics, gamma=gamma, families=len(by_family), future_opportunities=4,
+                premium=premium, discounted_gross=gross, discounted_net=[g-a for g,a in zip(gross,premium)])
+
+
+def calibrate(root, pair2=False):
     cold=read(root/"fit"/"results.jsonl")
     stream=read(root/"flow-fit"/"results.jsonl")
     if len(cold)!=112 or len(stream)!=300 or any(not r["task_id"].startswith("dev-") for r in cold+stream):
@@ -90,22 +114,25 @@ def calibrate(root):
                          + .05*(ref["L_s"]-row["L_s"])/10)
         f["reuse_value"]=sum(.9**j for j in (1,2))*fmean(gains)
         profile["_stream"][v]=f
+    if pair2:
+        profile["_amortization"] = {v:amortization([r for r in stream if r["forced_view"] == v]) for v in views}
     profile.update(fit_prices(cold,profile))
     profile["_hashes"]={stage:digest(root/stage/"results.jsonl") for stage in ("fit","flow-fit")}
-    path=root/"calibrated_predictor_pair1_v2.json"
+    path=root/("calibrated_predictor_pair2.json" if pair2 else "calibrated_predictor_pair1_v2.json")
     if path.exists():
         raise FileExistsError(path)
     R.dump(path,profile)
 
 
-def freeze(root):
+def freeze(root, pair2=False):
     dev_stage="dev-priced" if (root/"dev-priced").is_dir() else "dev"
     rows=read(root/dev_stage/"results.jsonl")+[r for r in read(root/"fit"/"results.jsonl") if r["arm"]==R.ARMS[1]]
-    profile=root/"calibrated_predictor_pair1_v2.json"
-    if len(rows)!=160 or any(not r["task_id"].startswith("dev-") for r in rows):
+    profile=root/("calibrated_predictor_pair2.json" if pair2 else "calibrated_predictor_pair1_v2.json")
+    expected_arms = (*R.ARMS, R.AMORTIZED) if pair2 else R.ARMS
+    if len(rows)!=32*len(expected_arms) or any(not r["task_id"].startswith("dev-") for r in rows):
         raise ValueError("incomplete dev evaluation")
     arms={}
-    for arm in R.ARMS:
+    for arm in expected_arms:
         group=[r for r in rows if r["arm"]==arm]
         assert len({r["task_id"] for r in group})==32
         arms[arm]=dict(U=fmean(r["U"] for r in group),calls=sum(r["attempts"] for r in group),
@@ -116,6 +143,14 @@ def freeze(root):
         all(arms[a]["calls"]>0 for a in R.ARMS[3:]) and
         any(f["future_exposure"]>0 for f in forecasts["_stream"].values()) and
         any(f["reuse_value"]>0 for f in forecasts["_stream"].values()))
+    if pair2:
+        # A natural all-local policy or nonpositive dev reuse estimate is a valid outcome.
+        # Freeze on integrity rather than selecting for a desired direction of effect.
+        ok = (all(x["unknown"]==0 and x["scopes_ok"] for x in arms.values()) and
+              all(r["P_ledger"] <= (1 if r["arm"]==R.ARMS[1] else .25) for r in rows) and
+              all(r["state"]=="settled" for r in
+                  {r["id"]:r for r in read(root/"billing.jsonl")}.values()) and
+              all(f["families"]==6 for f in forecasts["_amortization"].values()))
     R.dump(root/"freeze.json",dict(dev_pass=ok,arms=arms,profile_sha256=digest(profile),
         code=subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
         dev_sha256=digest(root/dev_stage/"results.jsonl"),time=datetime.now(timezone.utc).isoformat()))
@@ -127,5 +162,6 @@ if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("mode",choices=("fit","freeze"))
     p.add_argument("root",type=Path)
+    p.add_argument("--pair2",action="store_true")
     a=p.parse_args()
-    (calibrate if a.mode=="fit" else freeze)(a.root)
+    (calibrate if a.mode=="fit" else freeze)(a.root, a.pair2)

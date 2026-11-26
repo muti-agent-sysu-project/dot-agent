@@ -73,24 +73,25 @@ def flow_linkage(root):
     return output
 
 
-def run(root):
+def run(root, pair2=False):
     folder=root/"tables"
     scheduled=read(root/"confirm"/"schedule.jsonl")+read(root/"flow-confirm"/"schedule.jsonl")
     all_rows=read(root/"confirm"/"results.jsonl")+read(root/"flow-confirm"/"results.jsonl")
     def signature(r):
         return (r["task_id"],r["arm"],r.get("forced_view") or "")
     keys=list(map(signature,scheduled))
-    if len(set(keys))!=2320 or sorted(keys)!=sorted(map(signature,all_rows)):
-        raise ValueError("expected 800 cold, 320 paired replay, and 1200 flow slots")
+    if len(set(keys))!=(2240 if pair2 else 2320) or len(keys)!=len(set(keys)) or sorted(keys)!=sorted(map(signature,all_rows)):
+        raise ValueError("incomplete or duplicate frozen schedule")
     main=[r for r in all_rows if not r["forced_view"]]
     cold=[r for r in main if r["workload"]=="cold"]
     stream=[r for r in main if r["workload"]=="stream"]
     summaries=P.export(main,[r for r in scheduled if not r["forced_view"]],folder)
     R.dump(folder/"main.json",summaries)
     pairs=wide(cold,"U")
-    b9=R.ARMS[-1]
+    arms_cold = (*R.ARMS,R.AMORTIZED) if pair2 else R.ARMS
+    b9=arms_cold[-1]
     comparisons={}
-    for arm in R.ARMS[2:4]:
+    for arm in (R.ARMS[2:] if pair2 else R.ARMS[2:4]):
         comparisons[arm]=dict(bootstrap=A.bootstrap(pairs,b9,arm),mcnemar=A.mcnemar([(r[b9],r[arm]) for r in pairs]))
     adj=A.holm({a:c["mcnemar"]["p"] for a,c in comparisons.items()})
     for a in comparisons:
@@ -104,7 +105,7 @@ def run(root):
             minimal_minus_typed=A.bootstrap(paired,"relation","typed"))
     R.dump(folder/"handoff.json",tax)
     linkage={}
-    for arm in R.ARMS:
+    for arm in arms_cold:
         traces=[r["linkage"].get(arm) for r in cold if r["arm"]==arm]
         traces=[x for x in traces if x]
         linkage[arm]={k:dict(n=len(traces),top1=fmean(x[k]["top1"] for x in traces),
@@ -143,6 +144,8 @@ def run(root):
         for a,r in group.items():
             r["holm_p"]=adjusted[a]
     R.dump(folder/"paired-flow.json",groups)
+    if pair2:
+        report_pair2_intervals(cold, root, folder)
     bills={}
     for row in read(root/"billing.jsonl"):
         bills[row["id"]]=row
@@ -151,7 +154,35 @@ def run(root):
            upper_usd=sum(float(x["usd"]) for x in cloud),unknown=sum(x["state"]!="settled" for x in cloud)))
 
 
+def report_pair2_intervals(cold,root,folder):
+    # Each FinQA report group occurs once per arm. Draw complete groups inside structures.
+    intervals={}
+    for metric in ("U","C_tokens","C_usd","L_s","P_ledger","E_FinQA_exact"):
+        pairs = wide(cold,metric)
+        strata = {r["family_id"]:r["structure"] for r in cold}
+        for r in pairs:
+            r["stratum"]=strata[r["family_id"]]
+            r["zero"]=0
+        intervals[metric]={arm:A.bootstrap(pairs,arm,"zero")["ci95"] for arm in (*R.ARMS,R.AMORTIZED)}
+    R.dump(folder/"cold-arm-ci95.json",intervals)
+    events=read(root/"closure_choke_24"/"confirm"/"results.jsonl")
+    if len(events)!=72 or len({(r["arm"],r["task_id"]) for r in events})!=72:
+        raise ValueError("expected 24 paired closure workspaces")
+    pairs=wide(events,"U",stream=True)
+    outcomes={}
+    for arm in (R.ARMS[2],R.ARMS[3],R.AMORTIZED):
+        group=[r for r in events if r["arm"]==arm]
+        outcomes[arm]=dict(success=sum(r["U"] for r in group),n=len(group),
+                          blocked=sum(r["blocked"] for r in group),violations=sum(r["violation"] for r in group),
+                          ci95=A.bootstrap([dict(r,zero=0) for r in pairs],arm,"zero")["ci95"])
+    diffs={arm:dict(interval=A.bootstrap(pairs,R.AMORTIZED,arm),
+                    exact=A.mcnemar([(r[R.AMORTIZED],r[arm]) for r in pairs])) for arm in R.ARMS[2:4]}
+    R.dump(folder/"closure-summary.json",dict(arms=outcomes,paired=diffs))
+
+
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("root",type=Path)
-    run(p.parse_args().root)
+    p.add_argument("--pair2",action="store_true")
+    args=p.parse_args()
+    run(args.root,args.pair2)

@@ -182,6 +182,7 @@ class Skill:
 class Library:
     def __init__(self):
         self.skills = {}
+        self.encountered = set()
 
     def learn(self, task, raw):
         expr = expression(raw)

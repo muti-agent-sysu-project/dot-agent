@@ -208,6 +208,20 @@ class TransactionalBoundary:
         with self._transaction() as db:
             return self._review(db, candidate)[2]
 
+    def quote_sequence(self, candidates):
+        """Preview ordered disclosures against one snapshot, without reserving anything."""
+        with self._transaction() as db:
+            facts, charge = self._history(db)
+            initial = self.ledger.exposure(facts)
+            for candidate in candidates:
+                new, total, _ = self._review(db, candidate)
+                facts.update(new)
+                charge += total
+                self.ledger.check(facts, candidate.payload)
+                if self.ledger.exposure(facts) > self._pmax or charge > self._cmax:
+                    raise BudgetExhaustedError("continuation_limit")
+            return self.ledger.exposure(facts) - initial
+
     def standalone_quote(self, candidate):
         """B8's single-message quote. reserve always checks all outstanding history."""
         with self._transaction() as db:

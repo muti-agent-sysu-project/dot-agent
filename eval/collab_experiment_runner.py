@@ -27,6 +27,7 @@ from dot_agent.collab.skill_compiler import Example, LocalTrace, Primitive, Trac
 from dot_agent.collab.types import Action, Candidate, CollaborationError, Forecast, Scope, Usage
 from eval import disclosure_audit, paper_reporting
 
+AMORTIZED = "B9_v2_amortized"
 ARMS = ("B0_local_only", "B1_cloud_only", "B6_paac", "B8_modular", "B9_joint")
 PUBLIC_SHA = "09d685f2e39ac85cb46f54a81302dba2c2a4aa23dac9819abc6463cb62ced294"
 GRADER_SHA = "78205ff3787bc3d98813b9a009d93aab6de6ce408ec793ebc3011ad731f22669"
@@ -181,7 +182,7 @@ class Endpoint:
         return cls(os.environ[prefix + "_MODEL"], url + "/chat/completions", role, prefix, recipient)
 
     def candidate(self, action, view, data, prompt=PROMPT):
-        options = {"thinking": {"type": "disabled"}} if self.model == "deepseek-flash" else {}
+        options = {"thinking": {"type": "disabled"}} if self.model in ("deepseek-flash","deepseek-v4-pro") else {}
         wire = encode(dict(**options, model=self.model, temperature=0, max_tokens=CAP, stream=False,
                            messages=[dict(role="system", content=prompt),
                                      dict(role="user", content=encode(data).decode())]))
@@ -365,7 +366,7 @@ class Views:
 
 
 def factors(arm):
-    named = {"B9_no_S":(0,1,1,1),"B9_no_H":(1,0,1,1),"B9_no_D":(1,1,0,1),
+    named = {AMORTIZED:(1,1,1,1),"B9_no_S":(0,1,1,1),"B9_no_H":(1,0,1,1),"B9_no_D":(1,1,0,1),
              "B9_no_K":(1,1,1,0),"B9_replan":(1,1,1,1)}
     if arm in named:
         return named[arm]
@@ -479,9 +480,29 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
     local_choice = Candidate(Action.LOCAL, "local", b"")
     choices = tuple(c for c in (local_choice, selector, advice, fallback) if c is not None)
     quote = boundary.quote if h else boundary.standalone_quote
+    first_build = False
+    if arm == AMORTIZED and contract and library is not None:
+        first_build = task["metric"] not in library.encountered
+        library.encountered.add(task["metric"])
     def forecast(state, candidate):
         delta = 0 if candidate.action == Action.LOCAL else quote(candidate)
         f = profile_for(mode, profile, candidate, delta, views.stream)
+        if arm == AMORTIZED:
+            # Quote the joint closure once; the quote already contains today's delta.
+            exposure = float(delta)
+            if candidate.action == Action.DELEGATE:
+                if not continuations or any(nxt is None for nxt in continuations.values()):
+                    from dot_agent.collab.types import PolicyDeniedError
+                    raise PolicyDeniedError("no_legal_continuation")
+                exposure = max(float(boundary.quote_sequence((candidate, nxt)))
+                               for nxt in continuations.values())
+            bonus = 0.
+            if first_build:
+                net = profile["_amortization"][candidate.view_id]["discounted_net"]
+                bonus = max(0., sum(price * resource / scale for price, resource, scale
+                                    in zip(prices, net, (1000, 10, 1), strict=True)))
+            return Forecast(f.q_lower, f.failure_upper, f.remaining_tokens, f.remaining_seconds,
+                            exposure, bonus)
         if h and candidate.action != Action.LOCAL and float(p0) + f.remaining_exposure > .25:
             from dot_agent.collab.types import BudgetExhaustedError
             raise BudgetExhaustedError("predicted continuation exceeds available disclosure")
