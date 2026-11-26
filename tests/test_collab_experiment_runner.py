@@ -21,6 +21,13 @@ def test_formatted_execution_answers():
     assert not runner.answer("12.5%", 12.5, percent_scale=.01)
     assert not runner.answer("12 or 15", 12)
     assert not runner.answer("1.2 billion", 1.2, display="1.2 million")
+    assert runner.execution_answer("-$11.0 billion", {"question": "Change in billions?"},
+                                   {"answer": "-11", "exe_ans": -11})
+    assert runner.execution_answer("-$0.117 billion", {"table": [["in millions", "2004"]]},
+                                   {"answer": "-117", "exe_ans": -117})
+    assert runner.execution_answer("-33.84%", {}, {"answer": "-33.84%", "exe_ans": -33.84})
+    assert not runner.execution_answer("117 million", {"question": "What ratio?", "table": [["in millions"]]},
+                                       {"answer": "117", "exe_ans": 117})
 
 
 def test_public_reference_and_cache_fallback(monkeypatch, tmp_path):

@@ -71,15 +71,20 @@ def answer(text, expected, tol=1e-5, *, percent_scale=1, display=""):
     if isinstance(expected, str):
         return text.strip().lower() == expected.strip().lower()
     numeric = r"[+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
-    match = re.fullmatch(r"(\$?)\s*("+numeric+r")\s*(%|percent|million|billion|thousand)?", text, re.I)
+    text = re.sub(r"^([+-])\s*\$\s*", r"$\1", text)
+    match = re.fullmatch(r"(\$?)\s*("+numeric+r")\s*(%|percent|millions?|billions?|thousands?)?", text, re.I)
     if not match:
         return False
     value = float(match[2].replace(",", ""))
-    unit = (match[3] or "").lower()
+    unit = (match[3] or "").lower().removesuffix("s")
     if unit in ("%", "percent"):
         value *= percent_scale
-    elif unit and not re.search(r"\b" + unit + r"\b", str(display), re.I):
-        return False
+    elif unit:
+        canonical = {word.lower() for word in re.findall(r"\b(thousand|million|billion)s?\b", str(display), re.I)}
+        if len(canonical) != 1:
+            return False
+        scales = {"thousand": 1e3, "million": 1e6, "billion": 1e9}
+        value *= scales[unit] / scales[canonical.pop()]
     return math.isclose(value, expected, rel_tol=0, abs_tol=tol)
 
 
@@ -495,19 +500,38 @@ def linkage_controls():
     return disclosure_audit.linkage(roster, cases)
 
 
+def execution_answer(prediction, task, gt):
+    expected = gt.get("exe_ans", gt["answer"])
+    label = str(gt["answer"])
+    scale = 1 if "family_id" in gt else .01
+    percent = re.fullmatch(r"\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*%\s*", label)
+    if percent and isinstance(expected, (float, int)):
+        # Infer whether the annotation reports points or a fraction, never
+        # choose the interpretation that favors the model's prediction.
+        points = float(percent[1])
+        if abs(expected - points) < abs(100 * expected - points):
+            scale = 1
+    elif re.search(r"multiply\((?:[^,]+,\s*(?:const_)?100|(?:const_)?100,\s*[^)]+)\)$",
+                   gt.get("program", "")):
+        scale = 1
+    units = r"\b(?:in\s+)?(thousands?|millions?|billions?)\b"
+    question = task.get("question", "")
+    requested = re.findall(r"\bin\s+(thousands?|millions?|billions?)\b", question, re.I)
+    if requested:
+        label = " ".join(requested)
+    elif not re.search(r"percent|ratio|proportion|\bper\b", question, re.I) and not re.search(units, label, re.I):
+        document = task.get("files", {}).get(gt.get("file"), task)
+        header = (document.get("table") or [[]])[0]
+        label = " ".join(str(cell) for cell in header)
+    return answer(prediction, expected, gt.get("abs_tol", 1e-5), percent_scale=scale, display=label)
+
+
 def grade(completed, inputs, truth):
     rows, pairs, attacks = [], {}, {}
     for row, prediction, messages in completed:
         tid, arm = row["task_id"], row["arm"]
         gt = truth[tid]
-        expected = gt.get("exe_ans", gt["answer"])
-        scale = 1 if "family_id" in gt else .01
-        # FinQA programs may already convert a fraction to percentage points.
-        if re.search(r"multiply\((?:[^,]+,\s*(?:const_)?100|(?:const_)?100,\s*[^)]+)\)$",
-                     gt.get("program", "")):
-            scale = 1
-        row["U"] = int(row["status"]=="ok" and answer(prediction, expected,
-            gt.get("abs_tol",1e-5), percent_scale=scale, display=gt["answer"]))
+        row["U"] = int(row["status"]=="ok" and execution_answer(prediction, inputs[tid], gt))
         family = gt.get("report_group") or gt["family_id"]
         row["family_id"] = family
         pairs.setdefault(tid, dict(task_id=tid, family_id=family, stratum=family.split("/")[-1]))[arm] = row["U"]
