@@ -516,7 +516,7 @@ def grade(completed, inputs, truth):
     return rows, list(pairs.values()), summary
 
 
-def run(args):
+def run(args, *, prepare_endpoints=None, after_episode=None):
     arms = configured_arms(args.arms, args.ablation)
     if args.limit is not None and args.limit < 1:
         raise ValueError("positive limit required")
@@ -572,6 +572,8 @@ def run(args):
                     forecast="simulated" if simulated else "external" if profile else "uncalibrated-local-default",
                     status="running")
     dump(out/"run_manifest.json", manifest)
+    if prepare_endpoints:
+        local, clouds = prepare_endpoints(local, clouds)
     inputs = {r["id"]: r["input"] for r in tasks}
     completed = []
     for arm in arms:
@@ -589,6 +591,8 @@ def run(args):
             if rates and not simulated and not row["unknown_usage"]:
                 row["C_usd"] = sum(u[k]*rate for u in row["usage"] for k,rate in rates.items())/1e6
             completed.append((row,prediction,messages))
+            if after_episode:
+                after_episode(row)
     truth = json.loads(checked(args.dataset/"gt_manifest.json", GRADER_SHA))
     rows, pairs, attacks = grade(completed, inputs, truth)
     cluster = (disclosure_audit.bootstrap(pairs, ARMS[4], ARMS[3], seed=args.seed)

@@ -60,3 +60,29 @@ python -X utf8 -m eval.collab_experiment_runner --mode real --arms B9_joint --sp
 ~~~
 
 上述 profile 由独立开发集拟合后提供，示例路径是调用约定。JSON 顶层按 local、typed、relation、advice、fallback 分桶，各桶含 q_lower、failure_upper、remaining_tokens、remaining_seconds、future_exposure、reuse_value。缺桶时不给云动作置信承诺。可选 `--price-card` 提供 model、date 及每百万 token 的 raw_input、cache_read、output 美元单价。缺少可信分桶或单价时相应成本记 NA。正式实验仍需模型／硬件与预算冻结、独立校准、真实测量及人工审计。
+
+## 16 题真实先导
+
+从仓库根目录运行。启动器使用固定哈希的 FinQA-Priv v1 档案，按档案顺序取前 16 个 dev 私有实例，每次选一个臂。启动本机 llama-server，或将 AutoDL 的推理端口通过 SSH 转发到本机回环地址。租用 GPU 的时间费单列。云端使用支持非流式 chat completions 的端点，两端均须返回 prompt_tokens、completion_tokens 和明确的缓存输入桶。密钥通过相应的 API_KEY 环境变量注入。两端单次请求的输入 token 须满足上文所述字节上界。云价卡须给出该模型的实际或保守最高美元单价（涵盖计费时段）及 ISO 日期。
+
+以下两项文件路径由运行者指定。B6_paac 可省略 profile，B8_modular 和 B9_joint 需要独立开发集冻结的五桶 profile。下列命令依次执行离线配置检查、离线上界估算、真实运行。前两条不探测网络、不创建输出目录。
+
+~~~powershell
+$pilotArgs = @('--arm','B9_joint','--profile',$profilePath,'--price-card',$priceCardPath)
+python -X utf8 scripts/run_real_pilot.py @pilotArgs --preflight-only
+python -X utf8 scripts/run_real_pilot.py @pilotArgs --dry-run
+python -X utf8 scripts/run_real_pilot.py @pilotArgs
+~~~
+
+默认云端费用上限 2 美元，覆盖健康探针。单次完整运行最多 33 次云端、17 次本地调用（含两端各一次探针）。使用新的 --output-dir 并沿用该部署的 --journal-dir。billing.jsonl 先记预留、再记分桶回执；episodes.jsonl 逐题保存脱敏轨迹。账单未知或下一次预留会超限时中止，保留已写记录。完成后读取 run/audit.json、run/tables/cold.md、cold.tex 及 pareto-0.pdf。论文的 PilotTable 宏可指向 cold.tex；各臂真实数据就绪后再进行确认性比较。
+
+## EC² / OpenClaw 的步级挂钩
+
+官方 strategies.json 中的 advisory 对应 run_batch.py 的 agentic-advisor。该模式在容器内安装 cloud-advisor 插件，把完整对话发到所选云 provider 的 baseUrl。将此 baseUrl 配为容器可达、位于可信边界内的策略适配器 /v1 地址。保留真实供应商凭据在适配器一侧。官方插件自己的输入日志包含门控之前的上下文；事后统计实际云可见内容应使用网关发送记录。
+
+每个活动轨迹创建独立 EC2StrategyPlugin，注入任务级 Registry、ViewGenerator、完整 HTTP 信封构造器、固定策略的 TransactionalBoundary 和本地 forecast 回调。预测器接收本地工具结果句柄并返回当前消息之外的预计披露；网关审查并发送实际序列化的字节。每个主体及接收方顺序执行 episode，以便将共享账本的增量归属到任务。挂钩有两种入口：
+
+- 宿主工具循环在屏障处 await plugin.step_decide(...)，本地路径由宿主执行；工具执行后调用 record_tool_result(local_handle)，终止时调用 finalize_episode()。跨任务流将上一实例的 controller.prices 传给下一实例。K 开启时传入已验证的 skill 和本地 bindings_ref。
+- 原版 advisory 插件使用 ASGI 应用 plugin.openclaw_endpoint(project, local_chat)。project(wire) 在可信侧将官方请求映射为本地状态和已声明的 schema 绑定；local_chat 必须仅连接可信端模型。云端和本地适配器均返回完整非流式 chat completion 响应字节。用 export_skill(skills_root, arm) 写入可由 setup_skills 加载的 ec2-collab/SKILL.md。新增策略不依赖修改官方六臂的 CLI choices。官方 advisory 只在调用 advisor 时经过此入口，若要在所有本地步上决策须连接宿主循环入口。
+
+B6_paac 是别名代理委派适配；宿主负责本地 judge、工具反绑定和终止。B8_modular 使用固定价格与单消息报价。B9_joint 接受四位 shdk 覆盖，分别控制约束视图、历史报价、在线更新和技能执行。三者所有物理云请求均经过累计硬门。真实 EC² 容器及供应商账单仍需部署验证。
