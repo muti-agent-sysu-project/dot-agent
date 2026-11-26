@@ -1,4 +1,6 @@
 """Run the pinned synthetic FinQA-Priv v1 benchmark. Grading follows all episodes."""
+import ast
+import operator
 import argparse
 import asyncio
 import hashlib
@@ -28,8 +30,13 @@ from eval import disclosure_audit, paper_reporting
 ARMS = ("B0_local_only", "B1_cloud_only", "B6_paac", "B8_modular", "B9_joint")
 PUBLIC_SHA = "09d685f2e39ac85cb46f54a81302dba2c2a4aa23dac9819abc6463cb62ced294"
 GRADER_SHA = "78205ff3787bc3d98813b9a009d93aab6de6ce408ec793ebc3011ad731f22669"
-CAP = 256
-PROMPT = "Solve the supplied financial task. Return only the execution answer (number, yes, no, or undefined)."
+CAP = 1024
+PROMPT = ("Solve the financial question using the supplied report and requested period. Return one JSON object "
+          'with "expression" (arithmetic using numeric literals, parentheses and + - * /), "unit" '
+          '(ratio, percent, number, thousand, million or billion), and "answer". '
+          "The expression is evaluated locally. For percentages express points with unit percent, e.g. "
+          "100*(12-10)/10. Preserve source scale for unlabelled amounts with unit number. "
+          "For yes/no or undefined, use null expression and the literal answer.")
 SELECT = "Select the requested report. Return only its integer slot, or -1 if uncertain."
 
 
@@ -51,6 +58,55 @@ def dump(path, obj):
 
 def lines(path, rows):
     path.write_bytes(b"".join(encode(r) + b"\n" for r in rows))
+
+
+def arithmetic(expression):
+    """Finite bounded arithmetic, independent of task data or grading labels."""
+    if not isinstance(expression, str) or len(expression) > 512 or not re.fullmatch(r"[0-9.eE+*/() \-]+", expression):
+        raise ValueError("invalid arithmetic expression")
+    tree = ast.parse(expression.strip(), mode="eval")
+    if len(list(ast.walk(tree))) > 128:
+        raise ValueError("too many operations")
+    operations = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
+
+    def calculate(node):
+        if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+            value = float(node.value)
+        elif isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+            value = calculate(node.operand) * (-1 if isinstance(node.op, ast.USub) else 1)
+        elif isinstance(node, ast.BinOp) and type(node.op) in operations:
+            value = operations[type(node.op)](calculate(node.left), calculate(node.right))
+        else:
+            raise ValueError("unsupported operation")
+        if not math.isfinite(value):
+            raise ValueError("nonfinite result")
+        return value
+
+    return calculate(tree.body)
+
+
+def resolve_output(text):
+    """Resolve the same optional tool contract for every arm before offline grading."""
+    raw = text.strip()
+    fence = re.fullmatch(r"`{3}(?:json)?\s*(.*?)\s*`{3}", raw, re.I | re.S)
+    raw = fence[1] if fence else raw
+    if not raw.startswith("{"):
+        return text
+    try:
+        obj = json.loads(raw)
+        if "expression" not in obj:
+            return raw
+        if not set(obj) <= {"expression", "unit", "answer"}:
+            return ""
+        value = arithmetic(obj["expression"]) if obj["expression"] is not None else obj["answer"]
+        unit = (obj.get("unit") or "number").lower().strip()
+        if unit in ("number", "ratio", "usd", "dollars", "none", "unitless"):
+            return str(value)
+        if unit in ("percent", "%", "thousand", "million", "billion"):
+            return f"{value} {unit}"
+    except (ValueError, ArithmeticError, SyntaxError, AttributeError, TypeError, KeyError):
+        pass
+    return ""
 
 
 def answer(text, expected, tol=1e-5, *, percent_scale=1, display=""):
@@ -153,9 +209,7 @@ class Endpoint:
         key = os.getenv(self.config_prefix + "_API_KEY")
         if key:
             headers["Authorization"] = "Bearer " + key
-        request = Request(self.url, data=wire, headers=headers)
-        with build_opener(ProxyHandler({}), NoRedirect()).open(request, timeout=90) as response:
-            result = json.load(response)
+        result = self.response(wire, headers)
         usage = result.get("usage") or {}
         cache = (usage.get("prompt_tokens_details") or {}).get("cached_tokens")
         native_cache = usage.get("prompt_cache_hit_tokens")
@@ -172,6 +226,11 @@ class Endpoint:
         except (KeyError, IndexError, TypeError):
             body = ""
         return body if isinstance(body, str) else "", receipt
+
+    def response(self, wire, headers):
+        request = Request(self.url, data=wire, headers=headers)
+        with build_opener(ProxyHandler({}), NoRedirect()).open(request, timeout=90) as response:
+            return json.load(response)
 
 
 def growth(prior, current):
@@ -251,7 +310,7 @@ class Views:
         self.literals = ({str(v) for row in self.rows for v in row.values()} if self.rows else
                          {next(iter(task["files"])), *(str(v) for v in next(iter(task["files"].values())).values())}
                          if self.stream else set())
-        self.weights = {**{f"field{i}": 1 for i in range(len(self.literals))}, "selection": 1}
+        self.weights = {**{f"field{i}": 1 for i in range(len(self.literals))}, "selection": 1, "report_fingerprint": 1}
 
     def offer(self, action, name, obj, prompt=PROMPT):
         c = self.cloud.candidate(action, name, obj, prompt)
@@ -261,8 +320,10 @@ class Views:
         # Only the full-reference benchmark arm may transmit directory values.
         if name != "full" and facts:
             return None
-        if "selected" in obj or "selection_history" in obj or (name == "full" and not self.public):
+        if len(self.rows) > 1 and ("selected" in obj or "selection_history" in obj or name == "full"):
             facts.add("selection")
+        if self.rows and {"question", "table", "pre_text", "post_text"} <= obj.keys():
+            facts.add("report_fingerprint")
         if self.stream:
             facts.update(k for k in ("growth_schema","growth_guard") if k in obj)
         self.reviewed[c.payload, action, CAP] = facts
@@ -370,7 +431,7 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
         review = {key: {fact if fact in shared else principal+"/"+fact for fact in facts}
                   for key, facts in review.items()}
         principal = "synthetic-growth"
-    scope = Scope(principal, cloud.recipient, "finqa.v1")
+    scope = Scope(arm + "/" + principal, arm + "/" + cloud.recipient, "finqa.v1")
     ledger = TrajectoryPrivacyLedger(weights)
     messages, attempts, local_usage = [], [], []
     async def transmit(scope, wire, cap, aid):
@@ -382,10 +443,12 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
                                      p_max=1 if full else .25, c_max=250000, network_allowed=arm != ARMS[0])
     p0, _ = boundary.totals()
     steps = []
+    marginal_exposure = []
     async def send(candidate):
         if candidate is None:
             raise ValueError("no_legal_view")
         aid = uuid.uuid4().hex
+        marginal_exposure.append(float(boundary.quote(candidate)))
         permit = boundary.reserve(scope, candidate, aid)
         attempts.append(aid)
         steps.append(candidate.view_id)
@@ -403,8 +466,11 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
     quote = boundary.quote if h else boundary.standalone_quote
     def forecast(state, candidate):
         delta = 0 if candidate.action == Action.LOCAL else quote(candidate)
-        return profile_for(mode, profile, candidate, delta, views.stream)
-    options = dict(scales=(1000, 10, 1), budgets=(500, 5, .10), prices=prices, skills=bool(k))
+        f = profile_for(mode, profile, candidate, delta, views.stream)
+        if not h:
+            return Forecast(f.q_lower, f.failure_upper, f.remaining_tokens, f.remaining_seconds, float(delta), f.reuse_value)
+        return f
+    options = dict(risk=profile.get("_risk", .35), scales=(1000, 10, 1), budgets=(500, 5, .10), prices=prices, skills=bool(k))
     if arm == ARMS[3]:
         controller = ModularBaselineController(lambda *_: choices, forecast, quote, **options)
     else:
@@ -420,7 +486,8 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
             prediction = await send(reference)
         else:
             if forced_view is not None:
-                if arm != ARMS[4] or not slot["task_id"].startswith("dev-"):
+                if arm != ARMS[4] or not (slot["task_id"].startswith("dev-") or
+                        (slot.get("paired_handoff") and forced_view in ("typed", "relation"))):
                     raise ValueError("forced views restricted to development joint diagnostics")
                 choice = next((c for c in choices if c.view_id == forced_view), None)
             elif arm == ARMS[0]:
@@ -452,6 +519,8 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
                     steps.append("local_binding_correction")
                 normalized = next((i for i in views.aliases if str(i) == proposed.strip()), -1)
                 prediction = await send(continuations[normalized])
+        raw_prediction = prediction
+        prediction = resolve_output(prediction)
         if library and k:
             library.learn(values, prediction)
     except (CollaborationError, ValueError, OSError, KeyError) as exc:
@@ -464,7 +533,8 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
     unknown = sum(any(r[b] is None for b in ("raw_input","cache_read","output")) for r in receipts)
     tokens = None if unknown else sum(r[b] for r in receipts for b in ("raw_input","cache_read","output"))
     row = dict(**slot, simulated=mode=="stub", steps=steps, status=reason, L_s=wall, P_ledger=float(p1),
-               P_before=float(p0), delta_p=float(p1-p0), reserved_or_billed_tokens=charge,
+               raw_prediction=locals().get("raw_prediction", prediction), marginal_exposure=marginal_exposure,
+               principal=scope.principal, recipient_group=scope.recipient_group, P_before=float(p0), delta_p=float(p1-p0), reserved_or_billed_tokens=charge,
                usage=receipts, local_usage=local_usage, attempts=len(receipts), unknown_usage=unknown,
                C_tokens=tokens, C_usd=0 if not receipts or mode=="stub" else None, E_official=None)
     return row, prediction, messages, controller.prices
