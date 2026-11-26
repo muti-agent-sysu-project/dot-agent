@@ -85,6 +85,7 @@ class MeteredClient(ModelClient):
         caller: Caller, requested_tier: ModelTier,
     ) -> GenerationResult:
         last_err: Exception | None = None
+        length_retry_cap = getattr(self.inner, "length_retry_cap", 0)
         for attempt in range(self.retries + 1):
             started = time.perf_counter()
             try:
@@ -99,7 +100,12 @@ class MeteredClient(ModelClient):
                           failed.completion_tokens if failed else 0,
                           time.perf_counter() - started,
                           failed.usage_missing if failed else True,
-                          str(e) if isinstance(e, GenerationError) else type(e).__name__)
+                          str(e) if isinstance(e, GenerationError) else type(e).__name__, failed)
+                if (attempt < self.retries and failed and failed.finish_reason == "length"
+                        and max_tokens < length_retry_cap):
+                    max_tokens = min(2 * max_tokens, length_retry_cap)
+                    length_retry_cap = 0  # at most one budget increase
+                    continue
                 if attempt < self.retries and _is_transient(str(e)):
                     await asyncio.sleep(min(2.0**attempt, 8.0))
                     continue
@@ -112,7 +118,7 @@ class MeteredClient(ModelClient):
             self._log(
                 caller, self.tier, requested_tier,
                 result.prompt_tokens, result.completion_tokens,
-                result.latency_s, result.usage_missing, None,
+                result.latency_s, result.usage_missing, None, result,
             )
             return result
         raise last_err or RuntimeError("unreachable")
@@ -120,6 +126,7 @@ class MeteredClient(ModelClient):
     def _log(
         self, caller: Caller, tier: ModelTier, requested_tier: ModelTier,
         pt: int, ct: int, latency: float, usage_missing: bool, error: str | None,
+        result: GenerationResult | None = None,
     ) -> None:
         self.meter.log_call(
             caller=caller, tier=tier, requested_tier=requested_tier,
@@ -131,6 +138,9 @@ class MeteredClient(ModelClient):
                 caller=caller.value, tier=tier.value, requested_tier=requested_tier.value,
                 model=self.name, prompt_tokens=pt, completion_tokens=ct, latency_s=latency,
                 run_id=self.run_id, usage_missing=usage_missing, error=error,
+                finish_reason=result.finish_reason if result else None,
+                reasoning_chars=result.reasoning_chars if result else None,
+                reasoning_tokens=result.reasoning_tokens if result else None,
             )
         except (OSError, sqlite3.Error):
             raise LedgerWriteError("call_ledger_write_failed") from None

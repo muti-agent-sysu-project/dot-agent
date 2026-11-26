@@ -86,6 +86,9 @@ class GenerationResult:
     # 后端未回报 usage 时为 True：token 数不可信，计量侧记 NULL 不并入
     # 口径（known_subtotal + unknown_usage_calls 分列，不虚报不假报）
     usage_missing: bool = False
+    finish_reason: str | None = None
+    reasoning_chars: int | None = None
+    reasoning_tokens: int | None = None
 
 
 @dataclass

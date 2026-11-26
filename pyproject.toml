@@ -7,3 +7,6 @@ dependencies = []  # 框架阶段零三方依赖；接入真实模型时按需�
 
 [project.optional-dependencies]
 dev = ["pytest"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
