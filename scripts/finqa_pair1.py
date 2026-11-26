@@ -114,7 +114,7 @@ def main():
         gate = json.loads((args.out / "freeze.json").read_bytes())
         if gate["profile_sha256"] != digest(config) or not gate["dev_pass"]:
             raise ValueError("dev freeze required")
-    folder = args.out / args.stage
+    folder = args.out / ("dev-priced" if args.stage == "dev" and "_prices" in profile else args.stage)
     folder.mkdir(exist_ok=False)
     split = "confirm" if args.stage == "confirm" else "dev"
     packets = [r for r in map(json.loads,R.checked(args.dataset/"public_inputs.jsonl",R.PUBLIC_SHA).splitlines())
@@ -150,7 +150,7 @@ def main():
         def run(slot):
             arm,view,t = slot["arm"],slot["forced_view"],slot["task_id"]
             db = folder/(arm+"-"+(view or "policy")+".sqlite")
-            row,pred,wires,_ = asyncio.run(R.episode(slot,tasks[t],local,cloud,db,None,(.05,.05,.2),"real",
+            row,pred,wires,_ = asyncio.run(R.episode(slot,tasks[t],local,cloud,db,None,profile.get("_prices",(.05,.05,.2)),"real",
                                                        profile,41,forced_view=view))
             if not row["unknown_usage"]:
                 with meter.lock:

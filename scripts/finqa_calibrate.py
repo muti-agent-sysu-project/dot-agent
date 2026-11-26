@@ -29,6 +29,41 @@ def fit(rows, parent):
                 independent_families=len(rows))
 
 
+def fit_prices(rows,profile):
+    """Fit a common static operating point to forced dev actions under the published mean budgets."""
+    from itertools import product
+    groups={}
+    for r in rows:
+        if r["forced_view"] in ("local","relation","advice","fallback"):
+            groups.setdefault(r["family_id"],{})[r["forced_view"]]=r
+    cells=[]
+    for cp,lp,pp,floor in product((.05,.1,.15,.2,.25,.3,.4,.5),(.05,.10),(.2,.5,1.),(.6,.7,.8)):
+        policies=[]
+        for h in (False,True):
+            picks=[]
+            for group in groups.values():
+                offers=[]
+                for name,r in group.items():
+                    f=profile["_by_structure"][r["structure"]][name]
+                    delta=next(iter(r["marginal_exposure"]),0.)
+                    exposure=delta+(f["future_exposure"] if h else 0.)
+                    if name!="local" and (not r["attempts"] or exposure>.25 or f["failure_upper"]>profile["_risk"]):
+                        continue
+                    score=cp*f["remaining_tokens"]/1000+lp*f["remaining_seconds"]/10+pp*exposure-f["q_lower"]
+                    offers.append((score,name,r,f["q_lower"]))
+                if any(n!="fallback" and q>=floor for _,n,_,q in offers):
+                    offers=[o for o in offers if o[1]!="fallback"]
+                picks.append(min(offers,key=lambda o:(o[0],o[1]))[2])
+            policies.append(dict(U=fmean(x["U"] for x in picks),T=fmean(x["reserved_or_billed_tokens"] for x in picks),
+                                 L=fmean(x["L_s"] for x in picks),P=fmean(x["delta_p"] for x in picks)))
+        over=max(max(0,x["T"]/500-1,x["L"]/5-1,x["P"]/.1-1) for x in policies)
+        key=(over,-min(x["U"] for x in policies),-fmean(x["U"] for x in policies),
+             fmean(x["T"] for x in policies),cp,lp,pp,floor)
+        cells.append((key,(cp,lp,pp),floor,policies))
+    _,prices,floor,performance=min(cells,key=lambda c:c[0])
+    return {"_prices":prices,"_quality_floor":floor,"_price_fit":performance,"_grid_cells":len(cells)}
+
+
 def calibrate(root):
     cold=read(root/"fit"/"results.jsonl")
     stream=read(root/"flow-fit"/"results.jsonl")
@@ -55,6 +90,7 @@ def calibrate(root):
                          + .05*(ref["L_s"]-row["L_s"])/10)
         f["reuse_value"]=sum(.9**j for j in (1,2))*fmean(gains)
         profile["_stream"][v]=f
+    profile.update(fit_prices(cold,profile))
     profile["_hashes"]={stage:digest(root/stage/"results.jsonl") for stage in ("fit","flow-fit")}
     path=root/"calibrated_predictor_pair1_v2.json"
     if path.exists():
@@ -63,7 +99,8 @@ def calibrate(root):
 
 
 def freeze(root):
-    rows=read(root/"dev"/"results.jsonl")+[r for r in read(root/"fit"/"results.jsonl") if r["arm"]==R.ARMS[1]]
+    dev_stage="dev-priced" if (root/"dev-priced").is_dir() else "dev"
+    rows=read(root/dev_stage/"results.jsonl")+[r for r in read(root/"fit"/"results.jsonl") if r["arm"]==R.ARMS[1]]
     profile=root/"calibrated_predictor_pair1_v2.json"
     if len(rows)!=160 or any(not r["task_id"].startswith("dev-") for r in rows):
         raise ValueError("incomplete dev evaluation")
@@ -81,7 +118,7 @@ def freeze(root):
         any(f["reuse_value"]>0 for f in forecasts["_stream"].values()))
     R.dump(root/"freeze.json",dict(dev_pass=ok,arms=arms,profile_sha256=digest(profile),
         code=subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
-        dev_sha256=digest(root/"dev"/"results.jsonl"),time=datetime.now(timezone.utc).isoformat()))
+        dev_sha256=digest(root/dev_stage/"results.jsonl"),time=datetime.now(timezone.utc).isoformat()))
     if not ok:
         raise ValueError("development verification failed")
 

@@ -58,7 +58,7 @@ def main():
         def run(variant):
             arm,view,learn=variant
             library=W.Library() if learn else None
-            initial=(.05,.05,.2)
+            initial=profile.get("_prices",(.05,.05,.2))
             prices=initial
             journal=folder/f"{arm}-{view}-{learn}.sqlite"
             for slot in schedule:

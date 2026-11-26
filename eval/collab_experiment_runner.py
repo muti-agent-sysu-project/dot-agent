@@ -488,7 +488,7 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
         if not h:
             return Forecast(f.q_lower, f.failure_upper, f.remaining_tokens, f.remaining_seconds, float(delta), f.reuse_value)
         return f
-    options = dict(risk=profile.get("_risk", .35), scales=(1000, 10, 1), budgets=(500, 5, .10), prices=prices, skills=bool(k))
+    options = dict(quality_floor=profile.get("_quality_floor", .6), risk=profile.get("_risk", .35), scales=(1000, 10, 1), budgets=(500, 5, .10), prices=prices, skills=bool(k))
     if arm == ARMS[3]:
         controller = ModularBaselineController(lambda *_: choices, forecast, quote, **options)
     else:
