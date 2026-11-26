@@ -163,7 +163,9 @@ def report_pair2_intervals(cold,root,folder):
         for r in pairs:
             r["stratum"]=strata[r["family_id"]]
             r["zero"]=0
-        intervals[metric]={arm:A.bootstrap(pairs,arm,"zero")["ci95"] for arm in (*R.ARMS,R.AMORTIZED)}
+        intervals[metric]={arm:(A.bootstrap(pairs,arm,"zero")["ci95"]
+                                if all(r[arm] is not None for r in pairs) else None)
+                           for arm in (*R.ARMS,R.AMORTIZED)}
     R.dump(folder/"cold-arm-ci95.json",intervals)
     events=read(root/"closure_choke_24"/"confirm"/"results.jsonl")
     if len(events)!=72 or len({(r["arm"],r["task_id"]) for r in events})!=72:
