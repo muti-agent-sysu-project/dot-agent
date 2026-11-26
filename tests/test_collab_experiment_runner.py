@@ -14,6 +14,32 @@ from eval import collab_experiment_runner as runner
 from eval.finqa_priv import build, packet, stream, TYPES
 
 
+def test_formatted_execution_answers():
+    assert runner.answer('```json\n{"answer":"12.5%"}\n```', .125, percent_scale=.01)
+    assert runner.answer("12.5%", 12.5)
+    assert runner.answer("$1,200 million", 1200, display="1,200 million")
+    assert not runner.answer("12.5%", 12.5, percent_scale=.01)
+    assert not runner.answer("12 or 15", 12)
+    assert not runner.answer("1.2 billion", 1.2, display="1.2 million")
+
+
+def test_public_reference_and_cache_fallback(monkeypatch, tmp_path):
+    task = dict(question="Revenue?", table=[["2022", "20"]], pre_text=[], post_text=[])
+    network = Mock()
+    monkeypatch.setattr(runner, "build_opener", lambda *args: network)
+    usage = dict(prompt_tokens=40, prompt_tokens_details={"cached_tokens": None},
+                 prompt_cache_hit_tokens=17, completion_tokens=2)
+    network.open.return_value = io.BytesIO(runner.encode(dict(
+        choices=[{"message":{"content":"20"}}], usage=usage)))
+    cloud = runner.Endpoint("deepseek-flash", "https://fixture.invalid/v1", "cloud")
+    row, prediction, wires, _ = asyncio.run(runner.episode(
+        dict(arm="B1_cloud_only", task_id="dev-000-public"), task, runner.Endpoint("unused"),
+        cloud, tmp_path/"db", None, (.05,.05,.2), "real", {}, 41))
+    assert prediction == "20" and row["P_ledger"] == 0
+    assert json.loads(json.loads(wires[0])["messages"][1]["content"]) == task
+    assert row["C_tokens"] == 42 and row["usage"][0]["raw_input"] == 23
+
+
 def test_frozen_policy_zero_weights_and_escaped_literals():
     ledger = TrajectoryPrivacyLedger({"visible": 0, "secret": 2}, raw_forbidden=[b"private"])
     assert ledger.denominator == 2 and ledger.exposure(["visible"]) == 0

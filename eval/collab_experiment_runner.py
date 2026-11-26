@@ -53,13 +53,34 @@ def lines(path, rows):
     path.write_bytes(b"".join(encode(r) + b"\n" for r in rows))
 
 
-def answer(text, expected, tol=1e-5):
+def answer(text, expected, tol=1e-5, *, percent_scale=1, display=""):
+    text = text.strip()
+    fence = re.fullmatch(r"\x60{3}(?:json|text)?\s*(.*?)\s*\x60{3}", text, re.I | re.S)
+    if fence:
+        text = fence[1].strip()
+    if text.startswith(("{", '"')):
+        try:
+            value = json.loads(text)
+        except ValueError:
+            return False
+        if isinstance(value, dict):
+            value = value.get("answer") if set(value) == {"answer"} else None
+        if type(value) not in (str, int, float):
+            return False
+        text = str(value).strip()
     if isinstance(expected, str):
         return text.strip().lower() == expected.strip().lower()
-    try:
-        return math.isclose(float(text.strip().replace(",", "")), expected, rel_tol=0, abs_tol=tol)
-    except ValueError:
+    numeric = r"[+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
+    match = re.fullmatch(r"(\$?)\s*("+numeric+r")\s*(%|percent|million|billion|thousand)?", text, re.I)
+    if not match:
         return False
+    value = float(match[2].replace(",", ""))
+    unit = (match[3] or "").lower()
+    if unit in ("%", "percent"):
+        value *= percent_scale
+    elif unit and not re.search(r"\b" + unit + r"\b", str(display), re.I):
+        return False
+    return math.isclose(value, expected, rel_tol=0, abs_tol=tol)
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -99,7 +120,8 @@ class Endpoint:
         return cls(os.environ[prefix + "_MODEL"], url + "/chat/completions", role, prefix, recipient)
 
     def candidate(self, action, view, data, prompt=PROMPT):
-        wire = encode(dict(model=self.model, temperature=0, max_tokens=CAP, stream=False,
+        options = {"thinking": {"type": "disabled"}} if self.model == "deepseek-flash" else {}
+        wire = encode(dict(**options, model=self.model, temperature=0, max_tokens=CAP, stream=False,
                            messages=[dict(role="system", content=prompt),
                                      dict(role="user", content=encode(data).decode())]))
         return Candidate(action, view, wire, CAP)
@@ -130,8 +152,12 @@ class Endpoint:
         with build_opener(ProxyHandler({}), NoRedirect()).open(request, timeout=90) as response:
             result = json.load(response)
         usage = result.get("usage") or {}
-        cache = (usage.get("prompt_tokens_details") or {}).get("cached_tokens",
-                                                               usage.get("prompt_cache_hit_tokens"))
+        cache = (usage.get("prompt_tokens_details") or {}).get("cached_tokens")
+        native_cache = usage.get("prompt_cache_hit_tokens")
+        if cache is None:
+            cache = native_cache
+        elif native_cache is not None and native_cache != cache:
+            cache = None
         # Without cache telemetry the split is unknown, even when input total is known.
         receipt = Usage.from_inclusive_input(aid, usage.get("prompt_tokens"), cache,
                                              usage.get("completion_tokens"), "received",
@@ -210,14 +236,16 @@ class Views:
     """Closed vocabulary for the hash-pinned synthetic corpus. Every wire is reviewed locally."""
     def __init__(self, task, cloud, seed):
         self.task, self.cloud = task, cloud
-        self.stream = "directory" not in task
+        self.stream = "directory" not in task and "files" in task
+        self.public = "table" in task and not self.stream and "directory" not in task
         self.reviewed = {}
         self.rows = task.get("directory", [])
-        self.target = None if self.stream else selection(task)
+        self.target = selection(task) if self.rows else None
         self.aliases = list(range(len(self.rows)))
         random.Random(seed).shuffle(self.aliases)
         self.literals = ({str(v) for row in self.rows for v in row.values()} if self.rows else
-                         {next(iter(task["files"])), *(str(v) for v in next(iter(task["files"].values())).values())})
+                         {next(iter(task["files"])), *(str(v) for v in next(iter(task["files"].values())).values())}
+                         if self.stream else set())
         self.weights = {**{f"field{i}": 1 for i in range(len(self.literals))}, "selection": 1}
 
     def offer(self, action, name, obj, prompt=PROMPT):
@@ -228,7 +256,7 @@ class Views:
         # Only the full-reference benchmark arm may transmit directory values.
         if name != "full" and facts:
             return None
-        if "selected" in obj or "selection_history" in obj or name == "full":
+        if "selected" in obj or "selection_history" in obj or (name == "full" and not self.public):
             facts.add("selection")
         if self.stream:
             facts.update(k for k in ("growth_schema","growth_guard") if k in obj)
@@ -236,7 +264,7 @@ class Views:
         return c
 
     def selector(self, structured):
-        if self.stream:
+        if not self.rows:
             return None
         task = {"slots": list(range(len(self.rows))), "goal": "choose report"}
         if structured:
@@ -309,13 +337,13 @@ def profile_for(mode, profile, candidate, delta, stream):
                     estimate["reuse_value"] if stream else 0)
 
 
-async def episode(slot, task, local, cloud, db, library, prices, mode, profile, seed):
+async def episode(slot, task, local, cloud, db, library, prices, mode, profile, seed, *, forced_view=None):
     started = time.monotonic()
     arm = slot["arm"]
     s, h, d, k = factors(arm)
     views = Views(task, cloud, f"{seed}/{slot['task_id']}")
     full = arm == ARMS[1]
-    selector, advice = views.selector(s), views.advice(s)
+    selector, advice = views.selector(forced_view == "relation" if forced_view else s), views.advice(s)
     reference = views.offer(Action.FALLBACK, "full", task) if full else None
 
     fallback = views.report(views.aliases[views.target], fallback=True) if views.rows else None
@@ -386,7 +414,11 @@ async def episode(slot, task, local, cloud, db, library, prices, mode, profile, 
         elif full:
             prediction = await send(reference)
         else:
-            if arm == ARMS[0]:
+            if forced_view is not None:
+                if arm != ARMS[4] or not slot["task_id"].startswith("dev-"):
+                    raise ValueError("forced views restricted to development joint diagnostics")
+                choice = next((c for c in choices if c.view_id == forced_view), None)
+            elif arm == ARMS[0]:
                 choice = local_choice
             elif arm == ARMS[2]:
                 choice = selector or advice
@@ -468,8 +500,14 @@ def grade(completed, inputs, truth):
     for row, prediction, messages in completed:
         tid, arm = row["task_id"], row["arm"]
         gt = truth[tid]
-        row["U"] = int(row["status"]=="ok" and answer(prediction, gt.get("exe_ans",gt["answer"]),
-                                                      gt.get("abs_tol",1e-5)))
+        expected = gt.get("exe_ans", gt["answer"])
+        scale = 1 if "family_id" in gt else .01
+        # FinQA programs may already convert a fraction to percentage points.
+        if re.search(r"multiply\((?:[^,]+,\s*(?:const_)?100|(?:const_)?100,\s*[^)]+)\)$",
+                     gt.get("program", "")):
+            scale = 1
+        row["U"] = int(row["status"]=="ok" and answer(prediction, expected,
+            gt.get("abs_tol",1e-5), percent_scale=scale, display=gt["answer"]))
         family = gt.get("report_group") or gt["family_id"]
         row["family_id"] = family
         pairs.setdefault(tid, dict(task_id=tid, family_id=family, stratum=family.split("/")[-1]))[arm] = row["U"]
@@ -521,8 +559,12 @@ def run(args, *, prepare_endpoints=None, after_episode=None):
     if args.limit is not None and args.limit < 1:
         raise ValueError("positive limit required")
     public = checked(args.dataset/"public_inputs.jsonl", PUBLIC_SHA)
+    public_twin = getattr(args, "public_twin", False)
+    if public_twin and (arms != [ARMS[1]] or args.split == "stream"):
+        raise ValueError("public twin requires a cold B1 reference")
+    suffix = "-public" if public_twin else "-private"
     tasks = [r for r in map(json.loads, public.splitlines()) if r["split"] == args.split
-             and (args.split == "stream" or r["id"].endswith("-private"))][:args.limit]
+             and (args.split == "stream" or r["id"].endswith(suffix))][:args.limit]
     simulated = args.mode == "stub"
     local = Endpoint.configure("local", simulated) if any(a != ARMS[1] for a in arms) else Endpoint("unused")
     clouds = {a: Endpoint.configure("cloud", simulated, a) for a in arms if a != ARMS[0]}
@@ -549,7 +591,7 @@ def run(args, *, prepare_endpoints=None, after_episode=None):
     if any(out.iterdir()):
         raise ValueError("fresh output directory required to preserve prior attempts")
     schedule = [dict(task_id=r["id"], repeat=0, arm=a,
-                     dataset="FinQA-Priv-"+args.split, model_pair=local.model+"+"+cloud_model,
+                     dataset="FinQA-Priv-"+args.split+("-public" if public_twin else ""), model_pair=local.model+"+"+cloud_model,
                      workload="stream" if args.split=="stream" else "cold",
                      phase="ablation" if a.startswith("SHDK_") else "stream" if args.split=="stream" else "cold",
                      **dict(zip("SHDK", factors(a)))) for a in arms for r in tasks]
@@ -620,6 +662,7 @@ def parser():
     p.add_argument("--ablation", nargs="?", const="all", help="all or a four-bit SHDK cell")
     p.add_argument("--split", choices=("dev","confirm","stream"), default="dev")
     p.add_argument("--limit", type=int)
+    p.add_argument("--public-twin", action="store_true", help="use the pinned public B1 reference")
     p.add_argument("--mode", choices=("stub","real"), default="stub")
     p.add_argument("--profile", type=Path, help="frozen development forecasts by view")
     p.add_argument("--price-card", type=Path, help="dated model price card in USD per million")
