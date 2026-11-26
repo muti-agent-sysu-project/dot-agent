@@ -51,3 +51,33 @@ def test_second_turn_facts_and_arm_isolation(tmp_path):
     assert b6["P_before"]==b9["P_before"]==0
     assert len(b9["marginal_exposure"])==2 and all(x>0 for x in b9["marginal_exposure"])
     assert b9["P_ledger"]<=.25
+
+def test_unreceived_charge_survives_new_process_and_cap(tmp_path):
+    from decimal import Decimal
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from scripts.finqa_pair1 import Accounting,read
+    from dot_agent.collab.types import CollaborationError
+    meter=Accounting(tmp_path)
+    ep=SimpleNamespace(role="cloud",call=Mock(side_effect=TimeoutError))
+    wire=r.encode({"max_tokens":1024})
+    with pytest.raises(CollaborationError):
+        meter.invoke(ep,wire,"lost")
+    reopened=Accounting(tmp_path)
+    assert reopened.total==meter.total>0
+    assert read(reopened.log)[-1]["state"]=="unknown"
+    reopened.limit=reopened.total + Decimal(".000001")
+    with pytest.raises(CollaborationError):
+        reopened.invoke(ep,wire,"another")
+    assert ep.call.call_count==1 and reopened.total==meter.total
+
+
+def test_itt_includes_block_and_unknown_charges():
+    from scripts.finqa_pair_reporting import flow_metrics
+    rows=[dict(case=case,U=1,L_s=i+1,steps=steps,attempts=0 if steps else 1,
+               C_tokens=None if i==0 else 0,C_usd=None if i==0 else 0)
+          for i,(case,steps) in enumerate([("cold",[]),("binding",["skill"]),("binding",["skill"]),
+                                          ("drift",["schema_patch"]),("negative",["precondition_block"])])]
+    out=flow_metrics(rows)
+    assert out["itt_tokens"] is None and out["p50"]==3 and out["itt_seconds"]==3
+    assert out["hot_hits"]==2 and out["eligible_bindings"]==2 and out["active_blocks"]==1
