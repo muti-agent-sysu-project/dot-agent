@@ -38,6 +38,12 @@ CREATE TABLE IF NOT EXISTS calls (
   is_cache_hit      INTEGER DEFAULT 0,
   error             TEXT
 );
+CREATE TABLE IF NOT EXISTS generation_details (
+  call_id TEXT PRIMARY KEY REFERENCES calls(call_id),
+  finish_reason TEXT,
+  reasoning_chars INTEGER,
+  reasoning_tokens INTEGER
+);
 CREATE INDEX IF NOT EXISTS idx_calls_run ON calls(run_id);
 
 CREATE TABLE IF NOT EXISTS tasks (
@@ -107,6 +113,9 @@ def record_call(
     is_cache_hit: bool = False,
     error: str | None = None,
     db_path: Path | None = None,
+    finish_reason: str | None = None,
+    reasoning_chars: int | None = None,
+    reasoning_tokens: int | None = None,
 ) -> str:
     call_id = uuid.uuid4().hex
     known = not usage_missing and prompt_tokens is not None
@@ -128,6 +137,9 @@ def record_call(
         conn.execute(
             "INSERT INTO calls VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", row
         )
+        if any(v is not None for v in (finish_reason, reasoning_chars, reasoning_tokens)):
+            conn.execute("INSERT INTO generation_details VALUES (?,?,?,?)",
+                         (call_id, finish_reason, reasoning_chars, reasoning_tokens))
     return call_id
 
 

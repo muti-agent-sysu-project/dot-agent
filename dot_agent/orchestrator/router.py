@@ -9,7 +9,7 @@
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from ..types import Label, ModelTier, SignalScores
 
@@ -44,11 +44,15 @@ class Decision:
 
 
 class Router:
-    def __init__(self, theta_default: float = 0.5) -> None:
+    def __init__(self, theta_default: float | None = None) -> None:
+        if theta_default is not None and not 0 <= theta_default <= 1:
+            raise ValueError("theta_default must be in [0, 1]")
         self.theta_default = theta_default
 
     def assign(self, label: Label, signals: SignalScores | None) -> Decision:
         policy = POLICY[label]
+        if self.theta_default is not None:
+            policy = replace(policy, theta=self.theta_default)
         if signals is None:
             return Decision(policy.bias, policy, None, "no_signal→bias")
         score = signals.difficulty()

@@ -42,7 +42,7 @@ class AgentPipeline:
         local_client: ModelClient,
         cloud_client: ModelClient,
         meter: CallMeter | None = None,
-        theta_default: float = 0.5,
+        theta_default: float | None = None,
         use_signals: bool = True,  # False → v0 规则协同（信号关闭，仅 bias 路由）
         run_id: str = "default",   # 实验分组（SQLite 落库）
         mode: str = "auto",        # auto/rule/signal/local_only/cloud_only
@@ -206,6 +206,10 @@ class AgentPipeline:
 
     async def _fast_path(self, query: str, verify_kind: str, trace: list[str]) -> tuple[str, bool]:
         """本地直答；k=3 一致性（复用 SignalCollector 的 greedy 结果当答案）。"""
+        if not self.use_signals:
+            answer = await self.local.generate(query, max_tokens=256, caller=Caller.EXECUTE)
+            trace.append("fast_path: one local answer (signals disabled)")
+            return answer.text, self.verifier.verify(verify_kind, query, answer.text)
         sig, greedy = await self.signals.collect(query)
         if greedy is None:  # 本地试答被截断/空答/连接失败 → 交给上层升级
             trace.append("fast_path 本地试答不可用（截断/空答/失败）→ 升级完整流水线")
